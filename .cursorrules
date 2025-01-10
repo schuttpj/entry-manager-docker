@@ -1,0 +1,126 @@
+# Snag List Management Web App (Locally Hosted) - Development Instructions
+
+## Project Overview
+The Snag List Management Web App is a locally hosted, single-page application designed for secure and efficient management of snag lists. It allows users to upload photos, annotate them, and organize them with descriptions, voice comments, and filters. The app works entirely offline, storing all data locally. The following instructions provide step-by-step guidance to implement each core functionality of the application.
+
+## Core Functionalities
+
+### 1. Local Database Setup
+- **Description**: The app uses a local database to store all snag data, including photos, descriptions, annotations, and metadata.
+- **Database Requirements**:
+  - Utilize an embedded database like SQLite or IndexedDB for local storage.
+  - Tables/collections should include:
+    - `Snags`: Contains `id`, `photo_path`, `description`, `project_name`, `created_at`, and `updated_at`.
+    - `Annotations`: Maps `snag_id` to annotation data.
+  - Ensure database queries are optimized for offline usage.
+- **Implementation Steps**:
+  1. Set up the database schema for `Snags` and `Annotations`.
+  2. Create CRUD operations for adding, updating, and deleting snags.
+  3. Integrate the database with the front-end to display and manage snag data dynamically.
+
+---
+
+### 2. Single Landing Page Design
+- **Description**: Develop a single-page interface that combines an upload section and a snag list.
+- **UI Layout**:
+  - **Upload Section**: Includes an upload button and input fields for project name and optional description.
+  - **Snag List**: Displays snag thumbnails, descriptions, and metadata in an organized manner.
+- **Implementation Steps**:
+  1. Use a front-end framework like React or Vue.js for a responsive interface.
+  2. Create components for the upload section and snag list.
+  3. Use CSS for styling the page to maintain a user-friendly and clean design.
+
+---
+
+### 3. Photo Upload and Auto-Numbering
+- **Description**: Allow users to upload snag photos. Photos are auto-numbered based on project or criteria.
+- **Functional Details**:
+  - File upload supports drag-and-drop and button click.
+  - Generate a unique sequential number for each photo within a project.
+- **Implementation Steps**:
+  1. Use an input element with `type="file"` for photo uploads.
+  2. Implement auto-numbering logic tied to the selected project.
+  3. Store photo metadata in the local database.
+
+---
+
+### 4. Voice Comment Integration
+- **Description**: Use OpenAI Whisper to transcribe voice comments into snag descriptions or annotations.
+- **Integration Steps**:
+  1. Implement a voice recording feature using the browser's MediaRecorder API.
+  2. Send recorded audio to the OpenAI Whisper API for transcription.
+  3. Update snag descriptions or annotations with the transcription.
+- **Environment Variables**:
+  - Store the OpenAI Whisper API key securely in a `.env` file.
+  - Use a library like `dotenv` to manage environment variables.
+
+---
+
+### 5. Annotation and Editable Snags
+- **Description**: Enable annotation of photos and inline editing of snag descriptions.
+- **Functional Details**:
+  - Implement a canvas overlay for photo annotations.
+  - Allow text fields for descriptions and assignments to be editable directly on the page.
+- **Implementation Steps**:
+  1. Use a JavaScript library like Fabric.js for annotation functionality.
+  2. Enable inline text editing with an event-based system for saving updates.
+  3. Sync annotations and edited fields with the local database.
+
+---
+
+### 6. Search and Filters
+- **Description**: Implement a search bar and filter options to quickly locate snags.
+- **Search & Filter Options**:
+  - **Search**: Match keywords in descriptions or project names.
+  - **Filters**: Sort by date added, project name, or other metadata.
+- **Implementation Steps**:
+  1. Add a search input field with an event listener for query changes.
+  2. Implement filter buttons with sorting logic for snag lists.
+  3. Optimize search and filter operations for real-time performance.
+
+---
+
+### 7. PDF Export
+- **Description**: Allow users to select specific snags and export them as a PDF report.
+- **PDF Features**:
+  - Include photo thumbnails, descriptions, and other metadata in the export.
+  - Allow selection of specific snags to include in the report.
+- **Implementation Steps**:
+  1. Use a library like jsPDF for PDF generation.
+  2. Provide checkboxes or a selection interface for snag selection.
+  3. Format and export the selected data into a styled PDF.
+
+---
+
+### 8. Environment Variables for API Keys
+- **Description**: Manage API keys (e.g., for OpenAI Whisper) securely using local environment variables.
+- **Implementation Steps**:
+  1. Create a `.env` file in the project root to store sensitive keys.
+  2. Use a library like `dotenv` to load environment variables into the application.
+  3. Reference these variables wherever required in the code.
+
+---
+
+## Docs
+
+### 1. OpenAI Whisper API
+- **Library/API**: OpenAI Whisper API
+- **Documentation Link**: [OpenAI Whisper API Documentation](https://platform.openai.com/docs/whisper)
+
+### 2. jsPDF Library
+- **Library/API**: jsPDF
+- **Documentation Link**: [jsPDF Documentation](https://github.com/parallax/jsPDF)
+
+### 3. Fabric.js Library
+- **Library/API**: Fabric.js
+- **Documentation Link**: [Fabric.js Documentation](http://fabricjs.com/)
+
+---
+
+## Important Implementation Notes
+- Ensure all data is stored locally and no network calls are made for database operations.
+- Maintain a clean, intuitive single-page design.
+- Thoroughly test offline functionality for all features.
+- Use browser compatibility checks for APIs like MediaRecorder and IndexedDB.
+
+---
