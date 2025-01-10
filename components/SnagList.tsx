@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getSnagsByProject, deleteSnag, updateSnag, updateSnagAnnotations, getSnag } from '@/lib/db';
-import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare } from 'lucide-react';
+import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { Annotation } from '@/types/snag';
 import ImageAnnotator from './ImageAnnotator';
@@ -62,6 +62,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [annotatingSnag, setAnnotatingSnag] = useState<Snag | null>(null);
   const imageRefs = useRef<{ [key: string]: HTMLImageElement }>({});
+  const [error, setError] = useState<string | null>(null);
 
   // Add this function to calculate actual position
   const calculatePinPosition = (annotation: Annotation, image: HTMLImageElement) => {
@@ -110,9 +111,9 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
 
       try {
         setLoading(true);
+        setError(null);
         const loadedSnags = await getSnagsByProject(projectName);
         console.log('Loaded snags with annotations:', loadedSnags);
-        // Ensure all snags have an annotations array
         const snagWithAnnotations = loadedSnags.map(snag => ({
           ...snag,
           annotations: snag.annotations || []
@@ -120,6 +121,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
         setSnags(snagWithAnnotations);
       } catch (error) {
         console.error('Failed to load snags:', error);
+        setError('Failed to load snags. Please try refreshing the page.');
       } finally {
         setLoading(false);
       }
@@ -157,12 +159,20 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
   }, [snags, searchTerm, sortBy]);
 
   const handleDelete = async (id: string) => {
+    // Optimistically remove the snag
+    const snagToDelete = snags.find(s => s.id === id);
+    setSnags(snags.filter(snag => snag.id !== id));
+    setDeleteConfirmId(null);
+
     try {
       await deleteSnag(id);
-      setSnags(snags.filter(snag => snag.id !== id));
-      setDeleteConfirmId(null);
     } catch (error) {
       console.error('Failed to delete snag:', error);
+      // Revert the optimistic update
+      if (snagToDelete) {
+        setSnags(prev => [...prev, snagToDelete]);
+      }
+      setError('Failed to delete snag. Please try again.');
     }
   };
 
@@ -187,16 +197,26 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
   };
 
   const saveChanges = async (snag: Snag) => {
+    // Store the original snag state
+    const originalSnag = { ...snag };
+    
+    // Optimistically update the UI
+    setSnags(snags.map(s => 
+      s.id === snag.id 
+        ? { ...s, ...editState, updatedAt: new Date() } 
+        : s
+    ));
+    setEditingId(null);
+
     try {
       await updateSnag(snag.id, editState);
-      setSnags(snags.map(s => 
-        s.id === snag.id 
-          ? { ...s, ...editState } 
-          : s
-      ));
-      setEditingId(null);
     } catch (error) {
       console.error('Failed to update snag:', error);
+      // Revert the optimistic update
+      setSnags(snags.map(s => 
+        s.id === snag.id ? originalSnag : s
+      ));
+      setError('Failed to save changes. Please try again.');
     }
   };
 
@@ -594,6 +614,21 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
           onSave={handleAnnotationSave}
           onClose={() => setAnnotatingSnag(null)}
         />
+      )}
+
+      {error && (
+        <div className={`p-4 rounded-lg flex items-center space-x-2 ${
+          isDarkMode ? 'bg-red-900/20 text-red-200' : 'bg-red-50 text-red-800'
+        }`}>
+          <AlertCircle className="w-5 h-5" />
+          <span>{error}</span>
+          <button 
+            onClick={() => setError(null)}
+            className="ml-auto hover:opacity-70"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       )}
     </div>
   );

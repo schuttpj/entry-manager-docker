@@ -40,96 +40,76 @@ export const SnagListItem: FC<SnagListItemProps> = ({
   }, [snag.createdAt]);
 
   return (
-    <Card className="overflow-hidden hover:shadow-lg transition-all duration-200 border-l-4" 
-          style={{ borderLeftColor: getPriorityColor(snag.priority).color }}>
-      <div className="flex p-6 gap-8">
-        {/* Left: Image Section */}
-        <div className="relative w-[400px] h-[300px] flex-shrink-0 rounded-lg overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Image
-              src={snag.photoPath || '/placeholder-image.jpg'}
-              alt={`Snag #${snag.snagNumber}`}
-              className="object-contain w-full h-full hover:scale-105 transition-transform duration-300 ease-out"
-              width={400}
-              height={300}
-              priority
-            />
-          </div>
-          {/* Overlay Header with Snag Number */}
-          <div className="absolute top-0 left-0 right-0 p-3 bg-gradient-to-b from-black/60 to-transparent">
-            <div className="flex items-center justify-between">
-              <span className="text-white text-lg font-medium px-3 py-1.5 rounded">
-                #{snag.snagNumber}
-              </span>
-              {snag.annotations.length > 0 && (
-                <div className="bg-blue-500/90 text-white px-3 py-1.5 rounded-md text-sm flex items-center gap-2">
-                  <Paperclip className="w-5 h-5" />
-                  {snag.annotations.length}
-                </div>
-              )}
+    <div className="border-t first:border-t-0 py-6">
+      <div className="flex gap-6">
+        {/* Image Section */}
+        <div className="relative w-[200px] h-[200px] flex-shrink-0">
+          <Image
+            src={snag.photoPath || '/placeholder-image.jpg'}
+            alt={`Snag #${snag.snagNumber}`}
+            className="object-cover w-full h-full rounded-lg"
+            width={200}
+            height={200}
+            priority
+          />
+        </div>
+
+        {/* Content Section */}
+        <div className="flex-grow">
+          <h3 className="text-lg font-semibold mb-6">Snag #{snag.snagNumber}</h3>
+
+          <div className="grid grid-cols-3 gap-x-8 gap-y-4">
+            <div>
+              <div className="text-sm text-gray-500">Priority</div>
+              <div>{snag.priority}</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-500">Status</div>
+              <div>{snag.status}</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-500">Assigned To</div>
+              <div>{snag.assignedTo || 'Unassigned'}</div>
+            </div>
+            <div className="col-span-3">
+              <div className="text-sm text-gray-500">Created</div>
+              <div>Created {formattedDate}</div>
             </div>
           </div>
         </div>
 
-        {/* Middle: Content Section */}
-        <div className="flex-grow space-y-4 py-2">
-          <div className="flex items-center gap-3">
-            <h3 className="text-xl font-semibold flex-grow">{snag.description}</h3>
-            <Badge variant={getStatusVariant(snag.status)} className="text-sm px-3 py-1">
-              {snag.status}
-            </Badge>
-          </div>
-
-          <div className="flex flex-wrap gap-6 text-base text-gray-600 dark:text-gray-300">
-            <div className="flex items-center gap-2">
-              <User className="w-5 h-5" />
-              <span>{snag.assignedTo || 'Unassigned'}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-5 h-5" />
-              <span>{formattedDate}</span>
-            </div>
-            {snag.annotations.map((pin, index) => (
-              <div key={index} className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                <MessageSquare className="w-5 h-5" />
-                <span>Pin {index + 1}: {pin.text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right: Actions Section */}
-        <div className="flex flex-col gap-3 justify-start">
+        {/* Actions Section */}
+        <div className="flex gap-2">
           <Button
             variant="ghost"
-            size="sm"
-            className="w-10 h-10 p-0 hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95 transition-all"
-            onClick={() => onEdit(snag)}
-            title="Edit snag"
-          >
-            <Pencil className="w-5 h-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-10 h-10 p-0 hover:bg-gray-100 dark:hover:bg-gray-800 active:scale-95 transition-all"
+            size="icon"
             onClick={() => onViewAnnotations(snag)}
+            className="h-8 w-8"
             title="View annotations"
           >
-            <MessageSquare className="w-5 h-5" />
+            <MessageSquare className="w-4 h-4" />
           </Button>
           <Button
             variant="ghost"
-            size="sm"
-            className="w-10 h-10 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-95 transition-all"
+            size="icon"
+            onClick={() => onEdit(snag)}
+            className="h-8 w-8"
+            title="Edit snag"
+          >
+            <Pencil className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => onDelete(snag.id)}
+            className="h-8 w-8"
             title="Delete snag"
           >
-            <Trash2 className="w-5 h-5" />
+            <Trash2 className="w-4 h-4" />
           </Button>
         </div>
       </div>
-    </Card>
+    </div>
   );
 };
 
