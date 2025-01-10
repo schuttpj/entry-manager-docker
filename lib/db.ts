@@ -1,4 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { Annotation } from '../types/snag';
 
 interface SnagListDB extends DBSchema {
   projects: {
@@ -21,32 +22,29 @@ interface SnagListDB extends DBSchema {
       photoPath: string;
       priority: 'Low' | 'Medium' | 'High';
       assignedTo: string;
-      status: 'Open' | 'Closed';
+      status: 'Open' | 'In Progress' | 'Completed';
       createdAt: Date;
       updatedAt: Date;
+      annotations: Annotation[];
     };
     indexes: { 'by-project': string; 'by-date': Date };
   };
-  annotations: {
-    key: string;
-    value: {
-      id: string;
-      snagId: string;
-      data: string;
-      createdAt: Date;
-      updatedAt: Date;
-    };
-    indexes: { 'by-snag': string };
-  };
+}
+
+interface SnagUpdate {
+  description?: string;
+  priority?: 'Low' | 'Medium' | 'High';
+  assignedTo?: string;
+  status?: 'Open' | 'In Progress' | 'Completed';
 }
 
 const DB_NAME = 'snag-list-db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
   const db = await openDB<SnagListDB>(DB_NAME, DB_VERSION, {
     upgrade(db, oldVersion, newVersion) {
-      // Create projects store
+      // Create projects store if it doesn't exist
       if (!db.objectStoreNames.contains('projects')) {
         const projectStore = db.createObjectStore('projects', {
           keyPath: 'id',
@@ -55,20 +53,30 @@ export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
       }
 
       // Create or update snags store
+      let snagStore;
       if (!db.objectStoreNames.contains('snags')) {
-        const snagStore = db.createObjectStore('snags', {
+        snagStore = db.createObjectStore('snags', {
           keyPath: 'id',
         });
         snagStore.createIndex('by-project', 'projectName');
         snagStore.createIndex('by-date', 'createdAt');
+      } else {
+        snagStore = db.transaction('snags', 'readwrite').store;
       }
 
-      // Create or update annotations store
-      if (!db.objectStoreNames.contains('annotations')) {
-        const annotationStore = db.createObjectStore('annotations', {
-          keyPath: 'id',
+      // Add annotations array to existing snags if upgrading from version < 4
+      if (oldVersion < 4) {
+        snagStore.openCursor().then(function addAnnotations(cursor): Promise<void> | void {
+          if (!cursor) return;
+          
+          const snag = cursor.value;
+          if (!snag.annotations) {
+            snag.annotations = [];
+            cursor.update(snag);
+          }
+          
+          return cursor.continue().then(addAnnotations);
         });
-        annotationStore.createIndex('by-snag', 'snagId');
       }
     },
   });
@@ -88,7 +96,7 @@ async function getNextSnagNumber(projectName: string): Promise<number> {
 }
 
 // Snag CRUD operations
-export async function addSnag(snag: Omit<SnagListDB['snags']['value'], 'id' | 'createdAt' | 'updatedAt' | 'snagNumber'>) {
+export async function addSnag(snag: Omit<SnagListDB['snags']['value'], 'id' | 'createdAt' | 'updatedAt' | 'snagNumber' | 'annotations'>) {
   const db = await getDB();
   const id = crypto.randomUUID();
   const now = new Date();
@@ -101,6 +109,7 @@ export async function addSnag(snag: Omit<SnagListDB['snags']['value'], 'id' | 'c
     priority: snag.priority || 'Medium',
     assignedTo: snag.assignedTo || '',
     status: snag.status || 'Open',
+    annotations: [],
     createdAt: now,
     updatedAt: now,
   });
@@ -110,10 +119,12 @@ export async function addSnag(snag: Omit<SnagListDB['snags']['value'], 'id' | 'c
 
 export async function getSnag(id: string) {
   const db = await getDB();
-  return await db.get('snags', id);
+  const snag = await db.get('snags', id);
+  console.log('Retrieved snag:', { id, snag });
+  return snag;
 }
 
-export async function updateSnag(id: string, snag: Partial<SnagListDB['snags']['value']>) {
+export async function updateSnag(id: string, snag: Partial<Omit<SnagListDB['snags']['value'], 'id' | 'createdAt' | 'annotations'>>) {
   const db = await getDB();
   const existingSnag = await getSnag(id);
   
@@ -131,12 +142,6 @@ export async function updateSnag(id: string, snag: Partial<SnagListDB['snags']['
 export async function deleteSnag(id: string) {
   const db = await getDB();
   await db.delete('snags', id);
-  
-  // Also delete associated annotations
-  const annotationsToDelete = await getAnnotationsBySnag(id);
-  for (const annotation of annotationsToDelete) {
-    await deleteAnnotation(annotation.id);
-  }
 }
 
 export async function getAllSnags() {
@@ -147,54 +152,74 @@ export async function getAllSnags() {
 export async function getSnagsByProject(projectName: string) {
   const db = await getDB();
   const index = db.transaction('snags').store.index('by-project');
-  return await index.getAll(projectName);
+  const snags = await index.getAll(projectName);
+  console.log('Retrieved snags for project:', { projectName, snags });
+  return snags;
 }
 
-// Annotation CRUD operations
-export async function addAnnotation(annotation: { snagId: string; data: string }) {
+// New annotation functions that work with the embedded annotations
+export async function addAnnotationToSnag(snagId: string, annotation: Omit<Annotation, 'id'>) {
   const db = await getDB();
-  const id = crypto.randomUUID();
-  const now = new Date();
+  const snag = await getSnag(snagId);
   
-  await db.add('annotations', {
+  if (!snag) {
+    throw new Error('Snag not found');
+  }
+
+  const newAnnotation: Annotation = {
     ...annotation,
-    id,
-    createdAt: now,
-    updatedAt: now,
+    id: crypto.randomUUID()
+  };
+  
+  await db.put('snags', {
+    ...snag,
+    annotations: [...(snag.annotations || []), newAnnotation],
+    updatedAt: new Date()
   });
+
+  return newAnnotation;
+}
+
+export async function updateSnagAnnotations(snagId: string, annotations: Annotation[]): Promise<SnagListDB['snags']['value']> {
+  const db = await getDB();
+  const snag = await getSnag(snagId);
   
-  return id;
-}
-
-export async function getAnnotation(id: string) {
-  const db = await getDB();
-  return await db.get('annotations', id);
-}
-
-export async function getAnnotationsBySnag(snagId: string) {
-  const db = await getDB();
-  const index = db.transaction('annotations').store.index('by-snag');
-  return await index.getAll(snagId);
-}
-
-export async function updateAnnotation(id: string, data: string) {
-  const db = await getDB();
-  const existingAnnotation = await getAnnotation(id);
-  
-  if (!existingAnnotation) {
-    throw new Error('Annotation not found');
+  if (!snag) {
+    throw new Error('Snag not found');
   }
   
-  await db.put('annotations', {
-    ...existingAnnotation,
-    data,
-    updatedAt: new Date(),
-  });
-}
+  // Ensure annotations is a valid array and each annotation has required fields
+  const validAnnotations = Array.isArray(annotations) ? annotations.map(ann => ({
+    id: ann.id || crypto.randomUUID(),
+    x: ann.x,
+    y: ann.y,
+    text: ann.text || '',
+    size: ann.size
+  })) : [];
 
-export async function deleteAnnotation(id: string) {
-  const db = await getDB();
-  await db.delete('annotations', id);
+  console.log('Processing annotations for update:', {
+    snagId,
+    currentAnnotations: snag.annotations || [],
+    newAnnotations: validAnnotations
+  });
+
+  const updatedSnag = {
+    ...snag,
+    annotations: validAnnotations,
+    updatedAt: new Date()
+  };
+
+  console.log('Saving updated snag:', updatedSnag);
+  await db.put('snags', updatedSnag);
+  
+  // Verify the update and return the snag directly
+  const verifiedSnag = await getSnag(snagId);
+  if (!verifiedSnag) {
+    throw new Error('Failed to verify snag update');
+  }
+  console.log('Verified snag after update:', verifiedSnag);
+  
+  return verifiedSnag;
 }
 
 // Project CRUD operations

@@ -1,35 +1,35 @@
-# Snag List Management Web App
+# Snag List Manager
 
-A locally hosted, single-page application for secure and efficient management of snag lists. Upload photos, add annotations, organize with descriptions, and include voice comments - all working offline with local data storage.
+A modern web application for managing construction project snag lists with photo uploads, annotations, and organization features.
 
 ## Features
 
-- 📸 Photo Upload & Auto-numbering
-- ✏️ Photo Annotations
-- 🎤 Voice Comments (using OpenAI Whisper)
-- 💾 Offline-first with Local Storage
-- 🔍 Search and Filter Capabilities
-- 📑 PDF Export
+- Photo upload with drag-and-drop support
+- Project-based organization
+- Snag descriptions and annotations
+- Dark mode support
+- Responsive design
+- Offline-first architecture
+- Local data storage
 
 ## Tech Stack
 
-- Next.js 14 with App Router
+- Next.js 14
 - TypeScript
 - Tailwind CSS
+- shadcn/ui components
 - IndexedDB for local storage
-- Fabric.js for annotations
-- OpenAI Whisper API for voice transcription
 
 ## Getting Started
 
-1. Install dependencies:
+1. Clone the repository:
 ```bash
-npm install
+git clone [your-repository-url]
 ```
 
-2. Create a `.env.local` file and add your OpenAI API key:
-```
-OPENAI_API_KEY=your_api_key_here
+2. Install dependencies:
+```bash
+npm install
 ```
 
 3. Run the development server:
@@ -39,6 +39,15 @@ npm run dev
 
 4. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Development Status
+## Development
 
-🚧 Under Development 
+The application is built with Next.js and uses:
+- TypeScript for type safety
+- Tailwind CSS for styling
+- shadcn/ui for UI components
+- IndexedDB for local data storage
+- Modern React patterns and hooks
+
+## License
+
+MIT License 

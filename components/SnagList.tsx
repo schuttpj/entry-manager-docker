@@ -1,7 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
-import { getSnagsByProject, deleteSnag, updateSnag } from '@/lib/db';
-import { Trash2, Save, X, Search, SortDesc, Maximize2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { getSnagsByProject, deleteSnag, updateSnag, updateSnagAnnotations, getSnag } from '@/lib/db';
+import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
+import { Annotation } from '@/types/snag';
+import ImageAnnotator from './ImageAnnotator';
+import { SnagListItem } from './SnagListItem';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 
 interface Snag {
   id: string;
@@ -11,16 +24,17 @@ interface Snag {
   photoPath: string;
   priority: 'Low' | 'Medium' | 'High';
   assignedTo: string;
-  status: 'Open' | 'Closed';
+  status: 'Open' | 'In Progress' | 'Completed';
   createdAt: Date;
   updatedAt: Date;
+  annotations: Annotation[];
 }
 
 interface EditState {
   description: string;
   priority: 'Low' | 'Medium' | 'High';
   assignedTo: string;
-  status: 'Open' | 'Closed';
+  status: 'Open' | 'In Progress' | 'Completed';
 }
 
 interface SnagListProps {
@@ -46,6 +60,44 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
   const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [annotatingSnag, setAnnotatingSnag] = useState<Snag | null>(null);
+  const imageRefs = useRef<{ [key: string]: HTMLImageElement }>({});
+
+  // Add this function to calculate actual position
+  const calculatePinPosition = (annotation: Annotation, image: HTMLImageElement) => {
+    const imageWidth = image.naturalWidth;
+    const imageHeight = image.naturalHeight;
+    const containerWidth = image.width;
+    const containerHeight = image.height;
+
+    // Calculate scaling ratios
+    const imageRatio = imageWidth / imageHeight;
+    const containerRatio = containerWidth / containerHeight;
+
+    let actualWidth, actualHeight, offsetX = 0, offsetY = 0;
+
+    if (imageRatio > containerRatio) {
+      // Image is wider than container ratio - black bars on top and bottom
+      actualWidth = containerWidth;
+      actualHeight = containerWidth / imageRatio;
+      offsetY = (containerHeight - actualHeight) / 2;
+    } else {
+      // Image is taller than container ratio - black bars on sides
+      actualHeight = containerHeight;
+      actualWidth = containerHeight * imageRatio;
+      offsetX = (containerWidth - actualWidth) / 2;
+    }
+
+    // Calculate actual pixel positions
+    const x = (annotation.x / 100 * actualWidth) + offsetX;
+    const y = (annotation.y / 100 * actualHeight) + offsetY;
+
+    // Convert back to percentages relative to container
+    return {
+      x: (x / containerWidth) * 100,
+      y: (y / containerHeight) * 100
+    };
+  };
 
   // Load snags
   useEffect(() => {
@@ -59,7 +111,13 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
       try {
         setLoading(true);
         const loadedSnags = await getSnagsByProject(projectName);
-        setSnags(loadedSnags);
+        console.log('Loaded snags with annotations:', loadedSnags);
+        // Ensure all snags have an annotations array
+        const snagWithAnnotations = loadedSnags.map(snag => ({
+          ...snag,
+          annotations: snag.annotations || []
+        }));
+        setSnags(snagWithAnnotations);
       } catch (error) {
         console.error('Failed to load snags:', error);
       } finally {
@@ -159,6 +217,63 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [editingId, snags]);
 
+  const handleAnnotationSave = async (annotations: Annotation[] | unknown) => {
+    if (!annotatingSnag) return;
+
+    try {
+      // Handle both array and object with annotations property
+      let annotationsArray: unknown;
+      if (Array.isArray(annotations)) {
+        annotationsArray = annotations;
+      } else if (annotations && typeof annotations === 'object' && 'annotations' in annotations) {
+        annotationsArray = (annotations as { annotations: unknown }).annotations;
+      } else {
+        console.error('Invalid annotations format:', annotations);
+        throw new Error('Invalid annotations format');
+      }
+
+      if (!Array.isArray(annotationsArray)) {
+        console.error('Annotations is not an array:', annotationsArray);
+        throw new Error('Annotations must be an array');
+      }
+
+      // Ensure annotations are properly formatted
+      const formattedAnnotations = annotationsArray.map(ann => {
+        if (!ann || typeof ann !== 'object') {
+          throw new Error('Invalid annotation object');
+        }
+        
+        return {
+          id: String(ann.id || crypto.randomUUID()),
+          x: typeof ann.x === 'number' ? ann.x : 0,
+          y: typeof ann.y === 'number' ? ann.y : 0,
+          text: String(ann.text || ''),
+          size: typeof ann.size === 'number' ? ann.size : 24
+        };
+      });
+
+      console.log('Saving annotations:', formattedAnnotations, 'for snag:', annotatingSnag.id);
+      const updatedSnag = await updateSnagAnnotations(annotatingSnag.id, formattedAnnotations);
+      console.log('Snag after update:', updatedSnag);
+      
+      if (updatedSnag) {
+        // Ensure we have the annotations array, even if empty
+        const updatedAnnotations = Array.isArray(updatedSnag.annotations) ? updatedSnag.annotations : [];
+        
+        setSnags(snags.map(snag => 
+          snag.id === annotatingSnag.id 
+            ? { ...snag, annotations: updatedAnnotations } 
+            : snag
+        ));
+        
+        setAnnotatingSnag(null);
+      }
+    } catch (error) {
+      console.error('Failed to update annotations:', error);
+      // You might want to show an error message to the user here
+    }
+  };
+
   if (loading) {
     return (
       <div className={`rounded-lg shadow transition-colors duration-300 ${
@@ -251,191 +366,168 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
       ) : (
         <div className="divide-y divide-gray-200">
           {filteredSnags.map((snag) => (
-            <div 
-              key={snag.id} 
-              className={`p-4 transition-colors duration-300 ${
-                isDarkMode ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'
-              }`}
-            >
-              <div className="flex flex-col md:flex-row gap-4">
-                {/* Photo */}
-                <div className="md:w-1/3 relative group">
-                  <div className={`relative w-full rounded-lg overflow-hidden transition-colors duration-300 ${
-                    isDarkMode ? 'bg-gray-900' : 'bg-gray-50'
-                  }`}>
-                    <div className="aspect-[4/3] relative">
-                      <img
-                        src={snag.photoPath}
-                        alt={snag.description || `Snag #${snag.snagNumber}`}
-                        className="absolute inset-0 w-full h-full object-contain cursor-pointer"
-                        onClick={() => setZoomedImage(snag.photoPath)}
-                      />
-                    </div>
-                  </div>
-                  <div className={`absolute top-2 left-2 px-2 py-1 rounded-lg shadow-sm text-sm font-medium transition-all duration-300 ${
-                    isDarkMode ? 'bg-gray-800/90 text-white' : 'bg-white/90 text-gray-900'
-                  } backdrop-blur-sm`}>
-                    Snag #{snag.snagNumber}
-                  </div>
-                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-opacity rounded-lg">
+            <div key={snag.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
+              <div className="flex items-start space-x-4">
+                {/* Image section */}
+                <div className="flex-shrink-0 w-48 h-48 relative">
+                  <img
+                    src={snag.photoPath}
+                    alt={`Snag ${snag.snagNumber}`}
+                    className="w-full h-full object-cover rounded-lg cursor-pointer"
+                    onClick={() => setZoomedImage(snag.photoPath)}
+                    ref={el => { if (el) imageRefs.current[snag.id] = el; }}
+                  />
+                  {snag.annotations && snag.annotations.length > 0 && (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteConfirmId(snag.id);
-                      }}
-                      className={`absolute top-2 right-2 p-2 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all duration-300 transform hover:scale-105 ${
-                        isDarkMode
-                          ? 'bg-gray-800/90 text-red-400 hover:text-red-300'
-                          : 'bg-white/90 text-red-600 hover:text-red-700'
-                      } backdrop-blur-sm`}
-                      title="Delete"
+                      onClick={() => setAnnotatingSnag(snag)}
+                      className="absolute bottom-2 right-2 p-1 bg-white rounded-full shadow hover:bg-gray-100"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <MessageSquare className="w-5 h-5 text-blue-500" />
                     </button>
-                  </div>
+                  )}
                 </div>
 
-                {/* Details */}
-                <div className="md:w-2/3 space-y-4">
+                {/* Content section */}
+                <div className="flex-grow">
                   {editingId === snag.id ? (
-                    <div className="space-y-4">
+                    // Editing mode
+                    <div className="space-y-3">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Description
-                        </label>
-                        <textarea
+                        <Label>Description</Label>
+                        <Input
                           value={editState.description}
-                          onChange={(e) => setEditState(prev => ({ ...prev, description: e.target.value }))}
-                          className="w-full p-2 border rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          rows={3}
-                          placeholder="Enter description..."
-                          autoFocus
+                          onChange={(e) => setEditState({ ...editState, description: e.target.value })}
+                          className="mt-1"
                         />
                       </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Priority
-                          </label>
-                          <select
+                      <div className="flex space-x-4">
+                        <div className="flex-1">
+                          <Label>Priority</Label>
+                          <Select
                             value={editState.priority}
-                            onChange={(e) => setEditState(prev => ({ 
-                              ...prev, 
-                              priority: e.target.value as 'Low' | 'Medium' | 'High' 
-                            }))}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            onValueChange={(value) => setEditState({ ...editState, priority: value as 'Low' | 'Medium' | 'High' })}
                           >
-                            <option value="Low">Low</option>
-                            <option value="Medium">Medium</option>
-                            <option value="High">High</option>
-                          </select>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Low">Low</SelectItem>
+                              <SelectItem value="Medium">Medium</SelectItem>
+                              <SelectItem value="High">High</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Status
-                          </label>
-                          <select
+                        <div className="flex-1">
+                          <Label>Status</Label>
+                          <Select
                             value={editState.status}
-                            onChange={(e) => setEditState(prev => ({ 
-                              ...prev, 
-                              status: e.target.value as 'Open' | 'Closed' 
-                            }))}
-                            className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            onValueChange={(value) => setEditState({ ...editState, status: value as 'Open' | 'In Progress' | 'Completed' })}
                           >
-                            <option value="Open">Open</option>
-                            <option value="Closed">Closed</option>
-                          </select>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Open">Open</SelectItem>
+                              <SelectItem value="In Progress">In Progress</SelectItem>
+                              <SelectItem value="Completed">Completed</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
-
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Assigned To
-                        </label>
-                        <input
-                          type="text"
+                        <Label>Assigned To</Label>
+                        <Input
                           value={editState.assignedTo}
-                          onChange={(e) => setEditState(prev => ({ ...prev, assignedTo: e.target.value }))}
-                          className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          placeholder="Enter name..."
+                          onChange={(e) => setEditState({ ...editState, assignedTo: e.target.value })}
+                          className="mt-1"
                         />
                       </div>
-
-                      <div className="flex justify-end items-center space-x-4">
-                        <span className="text-sm text-gray-500">
-                          Press Esc to cancel • Ctrl+Enter to save
-                        </span>
-                        <div className="space-x-2">
-                          <button
-                            onClick={cancelEditing}
-                            className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => saveChanges(snag)}
-                            className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                          >
-                            <Save className="w-4 h-4" />
-                          </button>
-                        </div>
+                      <div className="flex justify-end space-x-2 mt-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={cancelEditing}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => saveChanges(snag)}
+                        >
+                          Save Changes
+                        </Button>
                       </div>
                     </div>
                   ) : (
-                    <div
-                      className="space-y-4 cursor-pointer hover:bg-gray-100 p-4 rounded-lg group relative"
-                      onClick={() => startEditing(snag)}
-                    >
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-700">Description</h3>
-                        <p className="mt-1 text-gray-600">{snag.description || 'No description'}</p>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
+                    // View mode
+                    <div>
+                      <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="text-sm font-medium text-gray-700">Priority</h3>
-                          <span className={`inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium
-                            ${snag.priority === 'High' 
-                              ? 'bg-red-100 text-red-800' 
-                              : snag.priority === 'Medium'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-green-100 text-green-800'
-                            }`}
-                          >
-                            {snag.priority}
-                          </span>
+                          <h3 className="text-lg font-medium">Snag #{snag.snagNumber}</h3>
+                          <p className="mt-1 text-gray-600 dark:text-gray-300">{snag.description}</p>
                         </div>
-
-                        <div>
-                          <h3 className="text-sm font-medium text-gray-700">Status</h3>
-                          <span className={`inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium
-                            ${snag.status === 'Open' 
-                              ? 'bg-blue-100 text-blue-800' 
-                              : 'bg-gray-100 text-gray-800'
-                            }`}
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => setAnnotatingSnag(snag)}
+                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-600 rounded"
+                            title="Add/Edit Annotations"
                           >
-                            {snag.status}
-                          </span>
+                            <MessageSquare className="w-5 h-5 text-blue-500" />
+                          </button>
+                          <button
+                            onClick={() => startEditing(snag)}
+                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-600 rounded"
+                          >
+                            <Save className="w-5 h-5 text-gray-500" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirmId(snag.id)}
+                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-600 rounded"
+                          >
+                            <Trash2 className="w-5 h-5 text-red-500" />
+                          </button>
                         </div>
                       </div>
-
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-700">Assigned To</h3>
-                        <p className="mt-1 text-gray-600">{snag.assignedTo || 'Unassigned'}</p>
+                      <div className="mt-4 grid grid-cols-3 gap-4">
+                        <div>
+                          <Label className="text-sm text-gray-500">Priority</Label>
+                          <div className="mt-1 font-medium">{snag.priority}</div>
+                        </div>
+                        <div>
+                          <Label className="text-sm text-gray-500">Status</Label>
+                          <div className="mt-1 font-medium">{snag.status}</div>
+                        </div>
+                        <div>
+                          <Label className="text-sm text-gray-500">Assigned To</Label>
+                          <div className="mt-1 font-medium">{snag.assignedTo || 'Unassigned'}</div>
+                        </div>
                       </div>
-
-                      <span className="text-sm text-blue-500 opacity-0 group-hover:opacity-100 absolute top-2 right-2">
-                        Click to edit
-                      </span>
+                      {/* Annotations List */}
+                      {snag.annotations && snag.annotations.length > 0 && (
+                        <div className="mt-4">
+                          <Label className="text-sm text-gray-500">Annotations</Label>
+                          <div className="mt-2 space-y-2">
+                            {snag.annotations.map((annotation, index) => (
+                              <div 
+                                key={annotation.id} 
+                                className="flex items-start space-x-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-700"
+                              >
+                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-200 text-sm">
+                                  {index + 1}
+                                </span>
+                                <p className="text-sm text-gray-600 dark:text-gray-300">
+                                  {annotation.text}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="mt-2 text-sm text-gray-500">
+                        Created {format(new Date(snag.createdAt), 'MMM d, yyyy')}
+                      </div>
                     </div>
                   )}
-                  <div className="text-sm text-gray-500">
-                    Added {format(new Date(snag.createdAt), 'MMM d, yyyy')}
-                    {snag.updatedAt > snag.createdAt && 
-                      ` • Updated ${format(new Date(snag.updatedAt), 'MMM d, yyyy')}`}
-                  </div>
                 </div>
               </div>
             </div>
@@ -479,32 +571,29 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
         </div>
       )}
 
-      {/* Image Zoom Modal */}
+      {/* Image Viewer Modal */}
       {zoomedImage && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+        <div
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
           onClick={() => setZoomedImage(null)}
         >
-          <div className="relative max-w-5xl w-full h-full flex items-center justify-center">
-            <button
-              onClick={() => setZoomedImage(null)}
-              className={`absolute top-4 right-4 p-2 rounded-full shadow-sm transition-all duration-300 transform hover:scale-105 ${
-                isDarkMode
-                  ? 'bg-gray-800/90 text-white hover:bg-gray-700/90'
-                  : 'bg-white/90 text-gray-900 hover:bg-gray-100/90'
-              } backdrop-blur-sm`}
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <div className="relative w-full h-full">
-              <img
-                src={zoomedImage}
-                alt="Zoomed view"
-                className="w-full h-full object-contain"
-              />
-            </div>
-          </div>
+          <img
+            src={zoomedImage}
+            alt="Zoomed snag"
+            className="max-w-[90vw] max-h-[90vh] object-contain"
+            onClick={e => e.stopPropagation()}
+          />
         </div>
+      )}
+
+      {/* Annotation Modal */}
+      {annotatingSnag && (
+        <ImageAnnotator
+          imageUrl={annotatingSnag.photoPath}
+          existingAnnotations={annotatingSnag.annotations}
+          onSave={handleAnnotationSave}
+          onClose={() => setAnnotatingSnag(null)}
+        />
       )}
     </div>
   );
