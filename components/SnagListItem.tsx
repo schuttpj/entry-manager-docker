@@ -3,6 +3,7 @@ import Image from 'next/image';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   User,
   MessageSquare,
@@ -12,7 +13,7 @@ import {
   Paperclip
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
-import { Snag } from '@/types';
+import { Snag } from '@/types/snag';
 import React from 'react';
 
 interface SnagListItemProps {
@@ -20,13 +21,17 @@ interface SnagListItemProps {
   onEdit: (snag: Snag) => void;
   onDelete: (id: string) => void;
   onViewAnnotations: (snag: Snag) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (snag: Snag) => void;
 }
 
 export const SnagListItem: FC<SnagListItemProps> = ({
   snag,
   onEdit,
   onDelete,
-  onViewAnnotations
+  onViewAnnotations,
+  isSelected = false,
+  onToggleSelect
 }) => {
   console.log('Snag data:', snag);
 
@@ -42,10 +47,21 @@ export const SnagListItem: FC<SnagListItemProps> = ({
   return (
     <div className="border-t first:border-t-0 py-6">
       <div className="flex gap-6">
+        {/* Selection Checkbox */}
+        {onToggleSelect && (
+          <div className="flex items-center">
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => onToggleSelect(snag)}
+              className="mt-1"
+            />
+          </div>
+        )}
+
         {/* Image Section */}
         <div className="relative w-[200px] h-[200px] flex-shrink-0">
           <Image
-            src={snag.photoPath || '/placeholder-image.jpg'}
+            src={snag.photoPath}
             alt={`Snag #${snag.snagNumber}`}
             className="object-cover w-full h-full rounded-lg"
             width={200}
@@ -76,19 +92,44 @@ export const SnagListItem: FC<SnagListItemProps> = ({
               <div>Created {formattedDate}</div>
             </div>
           </div>
+
+          {/* Annotations Section */}
+          {snag.annotations && snag.annotations.length > 0 && (
+            <div className="mt-4 border-t pt-4">
+              <div className="text-sm text-gray-500 mb-2">Annotations</div>
+              <div className="space-y-2">
+                {snag.annotations.map((annotation, index) => (
+                  <div key={annotation.id} className="flex items-start gap-2 text-sm">
+                    <span className="text-gray-500">{index + 1}.</span>
+                    <span>{annotation.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Actions Section */}
         <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => onViewAnnotations(snag)}
-            className="h-8 w-8"
-            title="View annotations"
-          >
-            <MessageSquare className="w-4 h-4" />
-          </Button>
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onViewAnnotations(snag)}
+              className="h-8 w-8"
+              title="View annotations"
+            >
+              <MessageSquare className="w-4 h-4" />
+            </Button>
+            {snag.annotations && snag.annotations.length > 0 && (
+              <Badge 
+                variant="secondary" 
+                className="absolute -top-2 -right-2 h-4 min-w-[16px] px-1 text-xs"
+              >
+                {snag.annotations.length}
+              </Badge>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="icon"

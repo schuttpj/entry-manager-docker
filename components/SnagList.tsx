@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { getSnagsByProject, deleteSnag, updateSnag, updateSnagAnnotations, getSnag } from '@/lib/db';
 import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
-import { Annotation } from '@/types/snag';
+import { Annotation, Snag } from '@/types/snag';
 import ImageAnnotator from './ImageAnnotator';
 import { SnagListItem } from './SnagListItem';
+import { PDFExport } from './PDFExport';
 import {
   Select,
   SelectContent,
@@ -15,20 +16,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-
-interface Snag {
-  id: string;
-  projectName: string;
-  snagNumber: number;
-  description: string;
-  photoPath: string;
-  priority: 'Low' | 'Medium' | 'High';
-  assignedTo: string;
-  status: 'Open' | 'In Progress' | 'Completed';
-  createdAt: Date;
-  updatedAt: Date;
-  annotations: Annotation[];
-}
 
 interface EditState {
   description: string;
@@ -50,6 +37,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
   const [filteredSnags, setFilteredSnags] = useState<Snag[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedSnags, setSelectedSnags] = useState<Set<string>>(new Set());
   const [editState, setEditState] = useState<EditState>({
     description: '',
     priority: 'Medium',
@@ -294,6 +282,22 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
     }
   };
 
+  const handleToggleSelect = (snag: Snag) => {
+    setSelectedSnags(prev => {
+      const newSelected = new Set(prev);
+      if (newSelected.has(snag.id)) {
+        newSelected.delete(snag.id);
+      } else {
+        newSelected.add(snag.id);
+      }
+      return newSelected;
+    });
+  };
+
+  const handleViewAnnotations = (snag: Snag) => {
+    setAnnotatingSnag(snag);
+  };
+
   if (loading) {
     return (
       <div className={`rounded-lg shadow transition-colors duration-300 ${
@@ -343,6 +347,10 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
             isDarkMode ? 'text-white' : 'text-gray-900'
           }`}>Snag List</h2>
           <div className="flex items-center gap-3">
+            <PDFExport 
+              snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))} 
+              projectName={projectName} 
+            />
             <div className="relative">
               <Search className={`w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 transition-colors duration-300 ${
                 isDarkMode ? 'text-gray-500' : 'text-gray-400'
@@ -387,169 +395,79 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
         <div className="divide-y divide-gray-200">
           {filteredSnags.map((snag) => (
             <div key={snag.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
-              <div className="flex items-start space-x-4">
-                {/* Image section */}
-                <div className="flex-shrink-0 w-48 h-48 relative">
-                  <img
-                    src={snag.photoPath}
-                    alt={`Snag ${snag.snagNumber}`}
-                    className="w-full h-full object-cover rounded-lg cursor-pointer"
-                    onClick={() => setZoomedImage(snag.photoPath)}
-                    ref={el => { if (el) imageRefs.current[snag.id] = el; }}
-                  />
-                  {snag.annotations && snag.annotations.length > 0 && (
-                    <button
-                      onClick={() => setAnnotatingSnag(snag)}
-                      className="absolute bottom-2 right-2 p-1 bg-white rounded-full shadow hover:bg-gray-100"
-                    >
-                      <MessageSquare className="w-5 h-5 text-blue-500" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Content section */}
-                <div className="flex-grow">
-                  {editingId === snag.id ? (
-                    // Editing mode
-                    <div className="space-y-3">
-                      <div>
-                        <Label>Description</Label>
-                        <Input
-                          value={editState.description}
-                          onChange={(e) => setEditState({ ...editState, description: e.target.value })}
-                          className="mt-1"
-                        />
-                      </div>
-                      <div className="flex space-x-4">
-                        <div className="flex-1">
-                          <Label>Priority</Label>
-                          <Select
-                            value={editState.priority}
-                            onValueChange={(value) => setEditState({ ...editState, priority: value as 'Low' | 'Medium' | 'High' })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Low">Low</SelectItem>
-                              <SelectItem value="Medium">Medium</SelectItem>
-                              <SelectItem value="High">High</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex-1">
-                          <Label>Status</Label>
-                          <Select
-                            value={editState.status}
-                            onValueChange={(value) => setEditState({ ...editState, status: value as 'Open' | 'In Progress' | 'Completed' })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Open">Open</SelectItem>
-                              <SelectItem value="In Progress">In Progress</SelectItem>
-                              <SelectItem value="Completed">Completed</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                      <div>
-                        <Label>Assigned To</Label>
-                        <Input
-                          value={editState.assignedTo}
-                          onChange={(e) => setEditState({ ...editState, assignedTo: e.target.value })}
-                          className="mt-1"
-                        />
-                      </div>
-                      <div className="flex justify-end space-x-2 mt-4">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={cancelEditing}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => saveChanges(snag)}
-                        >
-                          Save Changes
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    // View mode
+              {editingId === snag.id ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-lg font-medium">Snag #{snag.snagNumber}</h3>
-                          <p className="mt-1 text-gray-600 dark:text-gray-300">{snag.description}</p>
-                        </div>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => setAnnotatingSnag(snag)}
-                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-600 rounded"
-                            title="Add/Edit Annotations"
-                          >
-                            <MessageSquare className="w-5 h-5 text-blue-500" />
-                          </button>
-                          <button
-                            onClick={() => startEditing(snag)}
-                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-600 rounded"
-                          >
-                            <Save className="w-5 h-5 text-gray-500" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteConfirmId(snag.id)}
-                            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-600 rounded"
-                          >
-                            <Trash2 className="w-5 h-5 text-red-500" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="mt-4 grid grid-cols-3 gap-4">
-                        <div>
-                          <Label className="text-sm text-gray-500">Priority</Label>
-                          <div className="mt-1 font-medium">{snag.priority}</div>
-                        </div>
-                        <div>
-                          <Label className="text-sm text-gray-500">Status</Label>
-                          <div className="mt-1 font-medium">{snag.status}</div>
-                        </div>
-                        <div>
-                          <Label className="text-sm text-gray-500">Assigned To</Label>
-                          <div className="mt-1 font-medium">{snag.assignedTo || 'Unassigned'}</div>
-                        </div>
-                      </div>
-                      {/* Annotations List */}
-                      {snag.annotations && snag.annotations.length > 0 && (
-                        <div className="mt-4">
-                          <Label className="text-sm text-gray-500">Annotations</Label>
-                          <div className="mt-2 space-y-2">
-                            {snag.annotations.map((annotation, index) => (
-                              <div 
-                                key={annotation.id} 
-                                className="flex items-start space-x-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-700"
-                              >
-                                <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-200 text-sm">
-                                  {index + 1}
-                                </span>
-                                <p className="text-sm text-gray-600 dark:text-gray-300">
-                                  {annotation.text}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      <div className="mt-2 text-sm text-gray-500">
-                        Created {format(new Date(snag.createdAt), 'MMM d, yyyy')}
-                      </div>
+                      <Label htmlFor="description">Description</Label>
+                      <Input
+                        id="description"
+                        value={editState.description}
+                        onChange={(e) => setEditState(prev => ({ ...prev, description: e.target.value }))}
+                        className="mt-1"
+                      />
                     </div>
-                  )}
+                    <div>
+                      <Label htmlFor="assignedTo">Assigned To</Label>
+                      <Input
+                        id="assignedTo"
+                        value={editState.assignedTo}
+                        onChange={(e) => setEditState(prev => ({ ...prev, assignedTo: e.target.value }))}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="priority">Priority</Label>
+                      <Select
+                        value={editState.priority}
+                        onValueChange={(value) => setEditState(prev => ({ ...prev, priority: value as 'Low' | 'Medium' | 'High' }))}
+                      >
+                        <SelectTrigger id="priority" className="mt-1">
+                          <SelectValue placeholder="Select priority" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Low">Low</SelectItem>
+                          <SelectItem value="Medium">Medium</SelectItem>
+                          <SelectItem value="High">High</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="status">Status</Label>
+                      <Select
+                        value={editState.status}
+                        onValueChange={(value) => setEditState(prev => ({ ...prev, status: value as 'Open' | 'In Progress' | 'Completed' }))}
+                      >
+                        <SelectTrigger id="status" className="mt-1">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Open">Open</SelectItem>
+                          <SelectItem value="In Progress">In Progress</SelectItem>
+                          <SelectItem value="Completed">Completed</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={cancelEditing}>
+                      Cancel
+                    </Button>
+                    <Button onClick={() => saveChanges(snag)}>
+                      Save Changes
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <SnagListItem
+                  snag={snag}
+                  onEdit={startEditing}
+                  onDelete={(id) => setDeleteConfirmId(id)}
+                  onViewAnnotations={handleViewAnnotations}
+                  isSelected={selectedSnags.has(snag.id)}
+                  onToggleSelect={handleToggleSelect}
+                />
+              )}
             </div>
           ))}
         </div>

@@ -15,7 +15,7 @@ export interface Snag {
   priority: 'Low' | 'Medium' | 'High';
   assignedTo: string;
   status: 'Open' | 'In Progress' | 'Completed';
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string | Date;
+  updatedAt: string | Date;
   annotations: Annotation[];
 } 

@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { Annotation } from '../types/snag';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 
 interface ImageAnnotatorProps {
   imageUrl: string;
@@ -9,89 +12,63 @@ interface ImageAnnotatorProps {
   onClose: () => void;
 }
 
-export default function ImageAnnotator({ imageUrl, existingAnnotations, onSave, onClose }: ImageAnnotatorProps) {
+export default function ImageAnnotator({ imageUrl, existingAnnotations = [], onSave, onClose }: ImageAnnotatorProps) {
   const [annotations, setAnnotations] = useState<Annotation[]>(existingAnnotations);
-  const [selectedAnnotation, setSelectedAnnotation] = useState<Annotation | null>(null);
   const [isAddingAnnotation, setIsAddingAnnotation] = useState(false);
+  const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null);
+  const [comment, setComment] = useState('');
   const [pinSize, setPinSize] = useState(24);
-  const [showInstructions, setShowInstructions] = useState(false);
-  const imageRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
 
-  useEffect(() => {
-    if (isAddingAnnotation && !showInstructions) {
-      setShowInstructions(true);
-      const timer = setTimeout(() => setShowInstructions(false), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [isAddingAnnotation]);
+  const handleImageClick = (e: React.MouseEvent<HTMLImageElement>) => {
+    if (!isAddingAnnotation) return;
 
-  const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isAddingAnnotation || !imageRef.current) return;
-
-    const rect = imageRef.current.getBoundingClientRect();
+    const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
 
     const newAnnotation: Annotation = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       x,
       y,
       text: '',
-      size: pinSize,
+      size: pinSize
     };
 
-    setAnnotations([...annotations, newAnnotation]);
-    setSelectedAnnotation(newAnnotation);
-    setIsAddingAnnotation(false);
+    setAnnotations(prev => [...prev, newAnnotation]);
+    setSelectedAnnotation(newAnnotation.id);
+    setComment('');
   };
 
-  const handleAnnotationTextChange = (id: string, text: string) => {
-    setAnnotations(annotations.map(ann => 
-      ann.id === id ? { ...ann, text } : ann
+  const handleCommentSave = () => {
+    if (!selectedAnnotation) return;
+
+    setAnnotations(prev => prev.map(ann => 
+      ann.id === selectedAnnotation 
+        ? { ...ann, text: comment }
+        : ann
     ));
-  };
-
-  const handleAnnotationDelete = (id: string) => {
-    setAnnotations(annotations.filter(ann => ann.id !== id));
     setSelectedAnnotation(null);
+    setComment('');
   };
 
-  const adjustPinSize = (increment: number) => {
-    const newSize = Math.max(12, Math.min(48, pinSize + increment));
-    setPinSize(newSize);
-    if (selectedAnnotation) {
-      setAnnotations(annotations.map(ann =>
-        ann.id === selectedAnnotation.id ? { ...ann, size: newSize } : ann
-      ));
+  const deleteAnnotation = (id: string) => {
+    setAnnotations(prev => prev.filter(ann => ann.id !== id));
+    if (selectedAnnotation === id) {
+      setSelectedAnnotation(null);
+      setComment('');
     }
   };
 
-  const handleSave = () => {
-    // Filter out any invalid annotations and ensure text is handled safely
-    const validAnnotations = annotations.filter(ann => (
-      typeof ann === 'object' &&
-      ann !== null &&
-      typeof ann.x === 'number' &&
-      typeof ann.y === 'number'
-    )).map(ann => ({
-      ...ann,
-      text: typeof ann.text === 'string' ? ann.text : ''
-    }));
-    
-    onSave(validAnnotations);
+  const adjustPinSize = (delta: number) => {
+    setPinSize(prev => Math.max(12, Math.min(48, prev + delta)));
   };
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setSelectedAnnotation(null);
-        setIsAddingAnnotation(false);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  const handleSave = () => {
+    // Filter out annotations without text before saving
+    const validAnnotations = annotations.filter(ann => ann.text?.trim());
+    onSave(validAnnotations);
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -130,125 +107,124 @@ export default function ImageAnnotator({ imageUrl, existingAnnotations, onSave, 
               </div>
             )}
           </div>
-          <div className="space-x-2">
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 rounded bg-green-500 text-white hover:bg-green-600"
-            >
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave}>
               Save Changes
-            </button>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded bg-gray-500 text-white hover:bg-gray-600"
-            >
-              Close
-            </button>
+            </Button>
           </div>
         </div>
 
-        {showInstructions && (
-          <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-blue-50 border border-blue-200 p-4 rounded-lg shadow-lg z-50 max-w-md">
-            <div className="flex justify-between items-start">
-              <div className="space-y-2">
-                <h3 className="font-semibold text-blue-800">Quick Guide:</h3>
-                <ul className="text-sm text-blue-700 list-disc list-inside space-y-1">
-                  <li>Click on the image to add pins</li>
-                  <li>Use + / - buttons to adjust pin size</li>
-                  <li>Click on pins to add/edit comments</li>
-                  <li>Click Save Changes when finished</li>
-                </ul>
-              </div>
-              <button 
-                onClick={() => setShowInstructions(false)}
-                className="text-blue-500 hover:text-blue-700"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-4">
-          <div className="flex-1">
+        <div className="relative">
+          <Image
+            ref={imageRef}
+            src={imageUrl}
+            alt="Annotated image"
+            width={800}
+            height={600}
+            className="max-w-full h-auto rounded-lg cursor-crosshair"
+            onClick={handleImageClick}
+            priority
+          />
+          
+          {/* Annotation Pins */}
+          {annotations.map((pin, index) => (
             <div
-              ref={imageRef}
-              className="relative aspect-video"
-              onClick={handleImageClick}
+              key={pin.id}
+              className="absolute"
+              style={{
+                left: `${pin.x}%`,
+                top: `${pin.y}%`,
+                transform: 'translate(-50%, -50%)',
+              }}
             >
-              <Image
-                src={imageUrl}
-                alt="Annotatable image"
-                fill
-                className={`object-contain ${isAddingAnnotation ? 'cursor-crosshair' : 'cursor-default'}`}
-                sizes="(max-width: 768px) 100vw, 42rem"
-              />
-              {annotations.map((annotation, index) => (
-                <div
-                  key={annotation.id}
-                  className={`absolute flex items-center justify-center text-white text-sm cursor-pointer transition-all
-                    ${selectedAnnotation?.id === annotation.id ? 'bg-blue-500' : 'bg-red-500'} rounded-full`}
-                  style={{
-                    left: `${annotation.x}%`,
-                    top: `${annotation.y}%`,
-                    width: `${annotation.size || pinSize}px`,
-                    height: `${annotation.size || pinSize}px`,
-                    marginLeft: `-${(annotation.size || pinSize) / 2}px`,
-                    marginTop: `-${(annotation.size || pinSize) / 2}px`,
-                    fontSize: `${(annotation.size || pinSize) * 0.5}px`,
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedAnnotation(annotation);
-                    setIsAddingAnnotation(false);
-                  }}
-                >
-                  {index + 1}
-                </div>
-              ))}
-            </div>
-          </div>
+              {/* Pin */}
+              <div
+                className={`relative flex items-center justify-center rounded-full bg-red-500 text-white cursor-pointer transition-transform hover:scale-110 ${
+                  selectedAnnotation === pin.id ? 'ring-2 ring-blue-500' : ''
+                }`}
+                style={{
+                  width: `${pin.size || 24}px`,
+                  height: `${pin.size || 24}px`,
+                }}
+                onClick={() => {
+                  setSelectedAnnotation(pin.id);
+                  setComment(pin.text || '');
+                }}
+              >
+                {index + 1}
+              </div>
 
-          <div className="w-80">
-            <h3 className="font-semibold mb-2">Annotations</h3>
-            <div className="space-y-4">
-              {annotations.length === 0 ? (
-                <p className="text-gray-500">
-                  {isAddingAnnotation 
-                    ? 'Click on the image to add pins' 
-                    : 'Click the "+ Add Pins" button to start annotating'}
-                </p>
-              ) : (
-                annotations.map((annotation, index) => (
-                  <div
-                    key={annotation.id}
-                    className={`p-4 rounded border ${
-                      selectedAnnotation?.id === annotation.id
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center text-white text-sm">
-                        {index + 1}
-                      </span>
-                      <button
-                        onClick={() => handleAnnotationDelete(annotation.id)}
-                        className="text-red-500 hover:text-red-700 ml-auto"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                    <textarea
-                      value={annotation.text}
-                      onChange={(e) => handleAnnotationTextChange(annotation.id, e.target.value)}
-                      placeholder="Enter annotation text..."
-                      className="w-full p-2 border rounded resize-none"
-                      rows={3}
-                    />
+              {/* Comment Popup */}
+              {selectedAnnotation === pin.id && (
+                <div className="absolute z-10 bg-white rounded-lg shadow-lg p-4 min-w-[200px] transform -translate-x-1/2 mt-2">
+                  <Label htmlFor="comment">Comment</Label>
+                  <Input
+                    id="comment"
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    className="mt-1"
+                    placeholder="Add a comment..."
+                  />
+                  <div className="flex justify-end gap-2 mt-2">
+                    <Button variant="outline" onClick={() => setSelectedAnnotation(null)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCommentSave}>
+                      Save
+                    </Button>
                   </div>
-                ))
+                </div>
+              )}
+
+              {/* Hover Preview */}
+              {!selectedAnnotation && pin.text && (
+                <div className="absolute z-10 bg-white rounded-lg shadow-lg p-2 min-w-[150px] transform -translate-x-1/2 mt-2 text-sm">
+                  {pin.text}
+                </div>
               )}
             </div>
+          ))}
+        </div>
+
+        {/* Annotations List */}
+        <div className="mt-4">
+          <h3 className="text-lg font-semibold mb-2">Annotations</h3>
+          <div className="space-y-2">
+            {annotations.map((pin, index) => (
+              <div
+                key={pin.id}
+                className="flex items-start gap-2 p-2 rounded hover:bg-gray-50"
+              >
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center">
+                  {index + 1}
+                </div>
+                <div className="flex-grow">
+                  <p className="text-gray-700">
+                    {pin.text || 'No comment added'}
+                  </p>
+                  <div className="flex gap-2 mt-1">
+                    <button
+                      onClick={() => {
+                        setSelectedAnnotation(pin.id);
+                        setComment(pin.text || '');
+                      }}
+                      className="text-sm text-blue-500 hover:text-blue-600"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => deleteAnnotation(pin.id)}
+                      className="text-sm text-red-500 hover:text-red-600"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
