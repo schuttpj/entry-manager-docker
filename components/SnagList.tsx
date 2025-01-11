@@ -6,6 +6,7 @@ import { Annotation, Snag } from '@/types/snag';
 import ImageAnnotator from './ImageAnnotator';
 import { SnagListItem } from './SnagListItem';
 import { PDFExport } from './PDFExport';
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -30,7 +31,7 @@ interface SnagListProps {
   isDarkMode?: boolean;
 }
 
-type SortOption = 'newest' | 'oldest' | 'updated';
+type SortOption = 'newest' | 'oldest' | 'priority' | 'status';
 
 export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }: SnagListProps) {
   const [snags, setSnags] = useState<Snag[]>([]);
@@ -136,7 +137,9 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         case 'oldest':
           return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        case 'updated':
+        case 'priority':
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        case 'status':
           return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         default:
           return 0;
@@ -341,45 +344,71 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
       isDarkMode ? 'bg-gray-800' : 'bg-white'
     }`}>
       {/* Header with search and sort */}
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex justify-between items-center">
-          <h2 className={`text-lg font-medium transition-colors duration-300 ${
-            isDarkMode ? 'text-white' : 'text-gray-900'
-          }`}>Snag List</h2>
-          <div className="flex items-center gap-3">
-            <PDFExport 
-              snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))} 
-              projectName={projectName} 
-            />
+      <div className="p-6 border-b border-gray-200">
+        <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
+          {/* Left Section */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <h2 className={`text-xl font-semibold transition-colors duration-300 ${
+              isDarkMode ? 'text-white' : 'text-gray-900'
+            }`}>Snag List</h2>
+            {filteredSnags.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const allSelected = filteredSnags.length === selectedSnags.size;
+                  if (allSelected) {
+                    setSelectedSnags(new Set());
+                  } else {
+                    setSelectedSnags(new Set(filteredSnags.map(snag => snag.id)));
+                  }
+                }}
+                className="flex items-center gap-2 h-9"
+              >
+                <Checkbox 
+                  checked={filteredSnags.length > 0 && filteredSnags.length === selectedSnags.size}
+                  className="h-4 w-4 border-2"
+                />
+                <span className="text-sm">Select All</span>
+              </Button>
+            )}
+          </div>
+
+          {/* Right Section */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative">
               <Search className={`w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 transition-colors duration-300 ${
                 isDarkMode ? 'text-gray-500' : 'text-gray-400'
               }`} />
-              <input
+              <Input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Search descriptions..."
-                className={`w-64 pl-9 pr-4 py-1.5 text-sm rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 ${
+                className={`w-full sm:w-64 pl-9 h-9 transition-all duration-300 ${
                   isDarkMode
                     ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-400 focus:ring-gray-500'
                     : 'bg-white border-gray-200 text-gray-900 placeholder-gray-500 focus:ring-gray-400'
                 }`}
               />
             </div>
-            <select
+            <Select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className={`text-sm py-1.5 px-3 rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 ${
-                isDarkMode
-                  ? 'bg-gray-700 border-gray-600 text-gray-200 focus:ring-gray-500'
-                  : 'bg-white border-gray-200 text-gray-900 focus:ring-gray-400'
-              }`}
+              onValueChange={(value: SortOption) => setSortBy(value)}
             >
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="updated">Recently Updated</option>
-            </select>
+              <SelectTrigger className="w-full sm:w-[180px] h-9">
+                <SelectValue placeholder="Sort by..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="oldest">Oldest First</SelectItem>
+                <SelectItem value="priority">Priority</SelectItem>
+                <SelectItem value="status">Status</SelectItem>
+              </SelectContent>
+            </Select>
+            <PDFExport 
+              snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))} 
+              projectName={projectName} 
+            />
           </div>
         </div>
       </div>
