@@ -2,6 +2,7 @@ import { useCallback, useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, X, Check } from 'lucide-react';
 import { addSnag } from '@/lib/db';
+import { compressImage } from '@/lib/utils';
 
 interface UploadAreaProps {
   projectName: string;
@@ -48,10 +49,17 @@ export function UploadArea({
           reader.onloadend = async () => {
             try {
               if (typeof reader.result === 'string') {
+                // Compress the image before storing
+                const compressedImage = await compressImage(reader.result, {
+                  maxWidth: 1920,  // Limit max width to 1920px
+                  quality: 0.8,    // 80% quality
+                  maxSizeMB: 2     // Limit file size to 2MB
+                });
+                
                 await addSnag({
                   projectName,
                   description: preview.description,
-                  photoPath: reader.result,
+                  photoPath: compressedImage,
                   priority: 'Medium',
                   assignedTo: '',
                   status: 'Open'

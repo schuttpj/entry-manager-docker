@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Mic, Info, StopCircle, Play, Trash2, Sparkles } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { saveVoiceRecording, getVoiceRecordingsByProject, getVoiceRecording, getDB } from '@/lib/db';
+import { useOpenAI } from '@/hooks/use-openai';
 
 interface VoiceRecording {
   id: string;
@@ -19,6 +20,7 @@ interface AIVoiceAssistantProps {
 }
 
 export function AIVoiceAssistant({ isDarkMode = false, projectName }: AIVoiceAssistantProps) {
+  const { isAvailable: isAIAvailable } = useOpenAI();
   const [showInfo, setShowInfo] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
@@ -357,9 +359,10 @@ export function AIVoiceAssistant({ isDarkMode = false, projectName }: AIVoiceAss
             : isDarkMode 
               ? 'bg-white text-gray-900 hover:bg-gray-100' 
               : 'bg-gray-900 text-white hover:bg-gray-800'
-        } ${!projectName || isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+        } ${!projectName || isSaving || !isAIAvailable ? 'opacity-50 cursor-not-allowed' : ''}`}
         onClick={isRecording ? stopRecording : startRecording}
-        disabled={!projectName || isSaving}
+        disabled={!projectName || isSaving || !isAIAvailable}
+        title={!isAIAvailable ? "AI features are disabled. Add your OpenAI API key to enable voice recording." : undefined}
       >
         {isRecording ? (
           <>

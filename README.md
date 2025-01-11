@@ -1,25 +1,15 @@
-# Snag List Management Web App
+# Snag List Management Web App (Locally Hosted)
 
-A locally hosted, single-page application designed for secure and efficient management of snag lists. This application allows users to upload photos, annotate them, and organize them with descriptions, voice comments, and filters.
+A locally hosted, single-page application designed for secure and efficient management of snag lists. Upload photos, annotate them, and organize them with descriptions, voice comments, and filters. The app works entirely offline, storing all data locally.
 
 ## Features
 
-- 📸 Photo Upload with Auto-numbering
-- 🎯 Annotation Tools
-- 🔍 Search and Filter Capabilities
-- 📱 Responsive Design
-- 🌓 Dark Mode Support
-- 💾 Local Storage (IndexedDB)
-- 📊 Project Organization
-- 🔒 Offline-First Architecture
-
-## Tech Stack
-
-- Next.js 13+ (App Router)
-- TypeScript
-- Tailwind CSS
-- IndexedDB (via idb)
-- Shadcn/ui Components
+- **Photo Upload & Management**: Upload and organize photos with auto-numbering
+- **Annotations**: Add visual annotations and comments to photos
+- **Voice Comments**: Record voice notes (requires OpenAI API key for transcription)
+- **Search & Filters**: Quickly find snags by various criteria
+- **PDF Export**: Generate reports from selected snags
+- **Offline First**: All data stored locally in your browser
 
 ## Getting Started
 
@@ -34,61 +24,31 @@ A locally hosted, single-page application designed for secure and efficient mana
    npm install
    ```
 
-3. Run the development server:
+3. (Optional) Configure OpenAI API:
+   - If you want to use voice transcription features:
+     1. Get an API key from [OpenAI](https://platform.openai.com)
+     2. Create a `.env.local` file in the project root
+     3. Add your API key:
+        ```
+        NEXT_PUBLIC_OPENAI_API_KEY=your_api_key_here
+        ```
+   - Note: The app works fully without an OpenAI API key, but voice transcription will be disabled
+
+4. Start the development server:
    ```bash
    npm run dev
    ```
 
-4. Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-## Development
+## AI Features
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run lint` - Run ESLint
+The app includes optional AI-powered features that require an OpenAI API key:
 
-## Project Structure
+- **Voice Transcription**: Convert voice recordings to text using OpenAI's Whisper model
+- **Smart Commands**: Use voice commands to update snag information (coming soon)
 
-```
-snag-list2/
-├── app/                # Next.js app router files
-├── components/         # React components
-├── lib/               # Utility functions and database
-├── public/            # Static files
-└── types/             # TypeScript type definitions
-```
-
-## Database Schema
-
-The application uses IndexedDB with the following stores:
-
-- **Projects**: Stores project information
-  - id: string
-  - name: string
-  - createdAt: Date
-  - updatedAt: Date
-
-- **Snags**: Stores snag information
-  - id: string
-  - projectName: string
-  - snagNumber: number
-  - description: string
-  - photoPath: string
-  - priority: 'Low' | 'Medium' | 'High'
-  - status: 'Open' | 'In Progress' | 'Completed'
-  - assignedTo: string
-  - createdAt: Date
-  - updatedAt: Date
-  - annotations: Annotation[]
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+If no API key is provided, these features will be automatically disabled, and the app will show a notification. All other features will continue to work normally.
 
 ## License
 
