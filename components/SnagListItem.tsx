@@ -122,30 +122,39 @@ export const SnagListItem: FC<SnagListItemProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-x-12 gap-y-6">
-            <div className="space-y-1.5">
-              <div className="text-sm font-medium text-gray-500">Priority</div>
-              <Badge 
-                style={{
-                  backgroundColor: priorityColors.bg,
-                  color: priorityColors.color,
-                }}
-                className="text-sm px-3 py-1"
-              >
-                {snag.priority}
-              </Badge>
+          <div className="flex gap-8">
+            {/* Description Section */}
+            <div className="flex-grow">
+              <div className="text-sm font-medium text-gray-500 mb-2">Description</div>
+              <p className="text-sm text-gray-700">{snag.description || 'No description provided'}</p>
             </div>
-            <div className="space-y-1.5">
-              <div className="text-sm font-medium text-gray-500">Status</div>
-              <Badge variant={getStatusVariant(snag.status)} className="text-sm px-3 py-1">
-                {snag.status}
-              </Badge>
-            </div>
-            <div className="space-y-1.5">
-              <div className="text-sm font-medium text-gray-500">Assigned To</div>
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-gray-400" />
-                <span>{snag.assignedTo || 'Unassigned'}</span>
+
+            {/* Metadata Section - Stacked vertically */}
+            <div className="w-48 space-y-4">
+              <div className="space-y-1.5">
+                <div className="text-sm font-medium text-gray-500">Priority</div>
+                <Badge 
+                  style={{
+                    backgroundColor: priorityColors.bg,
+                    color: priorityColors.color,
+                  }}
+                  className="text-sm px-3 py-1"
+                >
+                  {snag.priority}
+                </Badge>
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-sm font-medium text-gray-500">Status</div>
+                <Badge variant={getStatusVariant(snag.status)} className="text-sm px-3 py-1">
+                  {snag.status}
+                </Badge>
+              </div>
+              <div className="space-y-1.5">
+                <div className="text-sm font-medium text-gray-500">Assigned To</div>
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-gray-400" />
+                  <span>{snag.assignedTo || 'Unassigned'}</span>
+                </div>
               </div>
             </div>
           </div>

@@ -69,7 +69,7 @@ interface SnagUpdate {
 }
 
 const DB_NAME = 'snag-list-db';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
   try {

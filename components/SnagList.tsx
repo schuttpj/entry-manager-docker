@@ -126,7 +126,10 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
     // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(snag => 
-        snag.description.toLowerCase().includes(searchTerm.toLowerCase())
+        snag.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        snag.annotations?.some(annotation => 
+          annotation.text.toLowerCase().includes(searchTerm.toLowerCase())
+        )
       );
     }
 
