@@ -78,6 +78,7 @@ export const SnagListItem: FC<SnagListItemProps> = ({
             <div>
               <h3 className="text-xl font-semibold">Snag #{snag.snagNumber}</h3>
               <p className="text-sm text-gray-500 mt-1">Created {formattedDate}</p>
+              <p className="text-base text-gray-700 mt-2">{snag.name || 'Untitled Snag'}</p>
             </div>
             
             {/* Actions Section */}

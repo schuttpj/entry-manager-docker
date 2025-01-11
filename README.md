@@ -41,6 +41,28 @@ A locally hosted, single-page application designed for secure and efficient mana
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser
 
+## Troubleshooting
+
+### Database Issues
+
+The app uses IndexedDB for local storage, which is automatically initialized when you first run the app. If you experience any issues:
+
+1. **Clear Browser Data**: If you encounter database errors, try:
+   - Open your browser's developer tools (F12)
+   - Go to Application > Storage > IndexedDB
+   - Delete the 'snag-list-db' database
+   - Refresh the page to reinitialize the database
+
+2. **Browser Support**: 
+   - Ensure you're using a modern browser that supports IndexedDB
+   - Recommended browsers: Chrome, Firefox, Edge, Safari 14+
+
+3. **Storage Space**: 
+   - Check if your browser has sufficient storage space
+   - The app needs space for storing images and voice recordings
+
+If problems persist, you can check the browser console for specific error messages.
+
 ## AI Features
 
 The app includes optional AI-powered features that require an OpenAI API key:

@@ -10,6 +10,7 @@ export interface Snag {
   id: string;
   projectName: string;
   snagNumber: number;
+  name: string;
   description: string;
   photoPath: string;
   priority: 'Low' | 'Medium' | 'High';

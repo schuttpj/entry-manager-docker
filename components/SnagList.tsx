@@ -23,6 +23,7 @@ interface EditState {
   priority: 'Low' | 'Medium' | 'High';
   assignedTo: string;
   status: 'Open' | 'In Progress' | 'Completed';
+  name: string;
 }
 
 interface SnagListProps {
@@ -43,7 +44,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
     description: '',
     priority: 'Medium',
     assignedTo: '',
-    status: 'Open'
+    status: 'Open',
+    name: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -176,7 +178,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
       description: snag.description,
       priority: snag.priority,
       assignedTo: snag.assignedTo,
-      status: snag.status
+      status: snag.status,
+      name: snag.name
     });
   };
 
@@ -186,7 +189,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
       description: '',
       priority: 'Medium',
       assignedTo: '',
-      status: 'Open'
+      status: 'Open',
+      name: ''
     });
   };
 
@@ -429,6 +433,15 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
               {editingId === snag.id ? (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="name">Name</Label>
+                      <Input
+                        id="name"
+                        value={editState.name}
+                        onChange={(e) => setEditState(prev => ({ ...prev, name: e.target.value }))}
+                        className="mt-1"
+                      />
+                    </div>
                     <div>
                       <Label htmlFor="description">Description</Label>
                       <Input
