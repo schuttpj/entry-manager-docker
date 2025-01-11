@@ -352,8 +352,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
               isDarkMode ? 'text-white' : 'text-gray-900'
             }`}>Snag List</h2>
             {filteredSnags.length > 0 && (
-              <Button
-                variant="outline"
+              <div
+                className="flex items-center gap-2 h-9 px-4 py-2 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer"
                 onClick={() => {
                   const allSelected = filteredSnags.length === selectedSnags.size;
                   if (allSelected) {
@@ -362,14 +362,13 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
                     setSelectedSnags(new Set(filteredSnags.map(snag => snag.id)));
                   }
                 }}
-                className="flex items-center gap-2 h-9"
               >
                 <Checkbox 
                   checked={filteredSnags.length > 0 && filteredSnags.length === selectedSnags.size}
                   className="h-4 w-4 border-2"
                 />
                 <span className="text-sm">Select All</span>
-              </Button>
+              </div>
             )}
           </div>
 

@@ -46,6 +46,19 @@ interface SnagListDB extends DBSchema {
     };
     indexes: { 'by-project': string; 'by-date': Date };
   };
+  voiceRecordings: {
+    key: string;
+    value: {
+      id: string;
+      projectName: string;
+      fileName: string;
+      audioBlob: Blob;
+      transcription?: string;
+      processed: boolean;
+      createdAt: Date;
+    };
+    indexes: { 'by-project': string; 'by-date': Date };
+  };
 }
 
 interface SnagUpdate {
@@ -56,7 +69,7 @@ interface SnagUpdate {
 }
 
 const DB_NAME = 'snag-list-db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
   try {
@@ -65,7 +78,7 @@ export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
     }
 
     const db = await openDB<SnagListDB>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion, newVersion) {
+      async upgrade(db, oldVersion, newVersion) {
         // Create projects store if it doesn't exist
         if (!db.objectStoreNames.contains('projects')) {
           const projectStore = db.createObjectStore('projects', {
@@ -75,38 +88,50 @@ export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
         }
 
         // Create or update snags store
-        let snagStore;
         if (!db.objectStoreNames.contains('snags')) {
-          snagStore = db.createObjectStore('snags', {
+          const snagStore = db.createObjectStore('snags', {
             keyPath: 'id',
           });
           snagStore.createIndex('by-project', 'projectName');
           snagStore.createIndex('by-date', 'createdAt');
-        } else {
-          snagStore = db.transaction('snags', 'readwrite').store;
         }
 
         // Add annotations array to existing snags if upgrading from version < 4
         if (oldVersion < 4) {
-          snagStore.openCursor().then(function addAnnotations(cursor): Promise<void> | void {
-            if (!cursor) return;
-            
-            const snag = cursor.value;
+          const tx = db.transaction('snags', 'readwrite');
+          const store = tx.store;
+          const snags = await store.getAll();
+          
+          for (const snag of snags) {
             if (!snag.annotations) {
               snag.annotations = [];
-              cursor.update(snag);
+              await store.put(snag);
             }
-            
-            return cursor.continue().then(addAnnotations);
-          });
+          }
+          
+          await tx.done;
         }
+
+        // Create voice recordings store if it doesn't exist (version 5)
+        if (!db.objectStoreNames.contains('voiceRecordings')) {
+          const voiceStore = db.createObjectStore('voiceRecordings', {
+            keyPath: 'id',
+          });
+          voiceStore.createIndex('by-project', 'projectName');
+          voiceStore.createIndex('by-date', 'createdAt');
+        }
+      },
+      blocked() {
+        console.warn('Database upgrade was blocked');
+      },
+      blocking() {
+        console.warn('Database is blocking an upgrade');
       },
     });
 
     dbInstance = db;
     updateConnectionStatus('connected');
     
-    // Monitor connection status
     db.addEventListener('close', () => {
       dbInstance = null;
       updateConnectionStatus('disconnected');
@@ -333,4 +358,53 @@ export async function deleteProject(id: string) {
   
   // Delete the project
   await db.delete('projects', id);
+}
+
+// Add new functions for voice recordings
+export async function saveVoiceRecording(
+  projectName: string,
+  fileName: string,
+  audioBlob: Blob
+): Promise<string> {
+  const db = await getDB();
+  const id = crypto.randomUUID();
+  const now = new Date();
+
+  const recording = {
+    id,
+    projectName,
+    fileName,
+    audioBlob,
+    processed: false,
+    createdAt: now,
+  };
+
+  await db.add('voiceRecordings', recording);
+  return id;
+}
+
+export async function getVoiceRecording(id: string) {
+  const db = await getDB();
+  return await db.get('voiceRecordings', id);
+}
+
+export async function getVoiceRecordingsByProject(projectName: string) {
+  const db = await getDB();
+  const index = db.transaction('voiceRecordings').store.index('by-project');
+  return await index.getAll(projectName);
+}
+
+export async function updateVoiceRecordingTranscription(id: string, transcription: string) {
+  const db = await getDB();
+  const recording = await getVoiceRecording(id);
+  
+  if (!recording) {
+    throw new Error('Voice recording not found');
+  }
+  
+  await db.put('voiceRecordings', {
+    ...recording,
+    transcription,
+    processed: true,
+  });
 } 

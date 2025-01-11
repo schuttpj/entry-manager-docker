@@ -5,6 +5,7 @@ import { ProjectSelector } from "@/components/ProjectSelector"
 import { UploadArea } from "@/components/UploadArea"
 import { SnagList } from "@/components/SnagList"
 import { NewProjectDialog } from "@/components/NewProjectDialog"
+import { AIVoiceAssistant } from "@/components/AIVoiceAssistant"
 import { addProject } from "@/lib/db"
 import { Moon, Sun } from "lucide-react"
 
@@ -72,6 +73,10 @@ export default function Home() {
               onNewProject={() => setIsNewProjectDialogOpen(true)}
               refreshTrigger={refreshTrigger}
               isDarkMode={isDarkMode}
+            />
+            <AIVoiceAssistant 
+              isDarkMode={isDarkMode} 
+              projectName={selectedProject}
             />
           </aside>
 
