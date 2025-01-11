@@ -6,6 +6,7 @@ import { Annotation, Snag } from '@/types/snag';
 import ImageAnnotator from './ImageAnnotator';
 import { SnagListItem } from './SnagListItem';
 import { PDFExport } from './PDFExport';
+import PDFExportList from './PDFExportList';
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
@@ -422,41 +423,32 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
           </div>
 
           {/* Right Section */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative">
-              <Search className={`w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 transition-colors duration-300 ${
-                isDarkMode ? 'text-gray-500' : 'text-gray-400'
-              }`} />
-              <Input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search descriptions..."
-                className={`w-full sm:w-64 pl-9 h-9 transition-all duration-300 ${
-                  isDarkMode
-                    ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-400 focus:ring-gray-500'
-                    : 'bg-white border-gray-200 text-gray-900 placeholder-gray-500 focus:ring-gray-400'
-                }`}
-              />
-            </div>
+          <div className="flex items-center gap-4">
             <Select
               value={sortBy}
-              onValueChange={(value: SortOption) => setSortBy(value)}
+              onValueChange={(value) => setSortBy(value as SortOption)}
             >
-              <SelectTrigger className="w-full sm:w-[180px] h-9">
-                <SelectValue placeholder="Sort by..." />
+              <SelectTrigger className="w-[180px]">
+                <SortDesc className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="Sort by" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="newest">Newest First</SelectItem>
                 <SelectItem value="oldest">Oldest First</SelectItem>
-                <SelectItem value="priority">Priority</SelectItem>
-                <SelectItem value="status">Status</SelectItem>
+                <SelectItem value="priority">By Priority</SelectItem>
+                <SelectItem value="status">By Status</SelectItem>
               </SelectContent>
             </Select>
-            <PDFExport 
-              snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))} 
-              projectName={projectName} 
-            />
+            <div className="flex items-center gap-2">
+              <PDFExport 
+                snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))} 
+                projectName={projectName} 
+              />
+              <PDFExportList
+                snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))} 
+                projectName={projectName} 
+              />
+            </div>
           </div>
         </div>
       </div>
