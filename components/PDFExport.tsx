@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
-import { Snag } from "@/types/snag";
+import { Snag, Annotation } from "@/types/snag";
 import jsPDF from "jspdf";
+import { format } from "date-fns";
+import { GState } from "jspdf";
 
 interface PDFExportProps {
   snags: Snag[];
@@ -50,11 +52,11 @@ const compressImage = async (imageUrl: string, maxWidth = 1200): Promise<string>
 
 const drawAnnotationPins = (
   doc: jsPDF,
-  annotations: Snag['annotations'],
   imageX: number,
   imageY: number,
   imageWidth: number,
-  imageHeight: number
+  imageHeight: number,
+  annotations: Annotation[]
 ) => {
   if (!annotations?.length) return;
 
@@ -81,6 +83,57 @@ const drawAnnotationPins = (
       console.error(`Failed to draw annotation pin ${index + 1}:`, err instanceof Error ? err.message : 'Unknown error');
     }
   });
+};
+
+// Add watermark for completed snags
+const addCompletedWatermark = (
+  doc: jsPDF,
+  imageX: number,
+  imageY: number,
+  imageWidth: number,
+  imageHeight: number,
+  completionDate: string | Date | null
+) => {
+  const centerX = imageX + imageWidth / 2;
+  const centerY = imageY + imageHeight / 2;
+  
+  // Calculate text size based on image width
+  const fontSize = Math.min(imageWidth * 0.3, 70); // 30% of image width, max 70pt
+  
+  // Add "COMPLETED" text centered on the image
+  doc.setFontSize(fontSize);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(34, 197, 94); // text-green-600
+  
+  const completedText = "COMPLETED";
+  // Move the main text up by half the date height to center the whole watermark
+  const dateOffset = completionDate ? fontSize * 0.8 : 0; // Increased spacing for date
+  doc.text(
+    completedText,
+    centerX,
+    centerY - (dateOffset / 2),
+    {
+      align: 'center',
+      angle: -30
+    }
+  );
+  
+  // Add completion date if available - positioned below the main text
+  if (completionDate) {
+    doc.setFontSize(fontSize * 0.35); // Increased font size for date
+    doc.setFont(undefined, 'bold'); // Made date bold
+    const dateText = format(new Date(completionDate), 'MMM d, yyyy');
+    
+    doc.text(
+      dateText,
+      centerX,
+      centerY + (dateOffset / 2),
+      {
+        align: 'center',
+        angle: -30
+      }
+    );
+  }
 };
 
 export function PDFExport({ snags, projectName }: PDFExportProps) {
@@ -127,9 +180,25 @@ export function PDFExport({ snags, projectName }: PDFExportProps) {
         doc.setFillColor(245, 245, 245);
         doc.rect(margin, yPosition - 5, contentWidth, 12, 'F');
         doc.setFontSize(16);
-        doc.setTextColor(0, 0, 0);
+        if (snag.status === 'Completed') {
+          doc.setTextColor(34, 197, 94); // text-green-600
+          doc.setFont(undefined, 'bold');
+        } else {
+          doc.setTextColor(0, 0, 0);
+          doc.setFont(undefined, 'normal');
+        }
         doc.text(`Snag #${snag.snagNumber}`, margin + 2, yPosition + 3);
         yPosition += 15;
+
+        // Add watermark for completed snags
+        if (snag.status === 'Completed') {
+          const snagContentHeight = 200; // Approximate height for snag content
+          addCompletedWatermark(doc, margin, yPosition - 15, contentWidth, snagContentHeight, snag.completionDate);
+        }
+        
+        // Reset text color and font
+        doc.setTextColor(0, 0, 0);
+        doc.setFont(undefined, 'normal');
         
         // Add snag details in a grid layout
         doc.setFontSize(10);
@@ -189,9 +258,21 @@ export function PDFExport({ snags, projectName }: PDFExportProps) {
           const xOffset = (contentWidth - imgWidth) / 2;
           doc.addImage(compressedImage, 'JPEG', margin + xOffset, yPosition, imgWidth, imgHeight);
           
+          // Add watermark for completed snags (moved here to overlay the image)
+          if (snag.status === 'Completed') {
+            addCompletedWatermark(
+              doc,
+              margin + xOffset,
+              yPosition,
+              imgWidth,
+              imgHeight,
+              snag.completionDate
+            );
+          }
+          
           // Add annotation pins
           if (snag.annotations?.length) {
-            drawAnnotationPins(doc, snag.annotations, margin + xOffset, yPosition, imgWidth, imgHeight);
+            drawAnnotationPins(doc, margin + xOffset, yPosition, imgWidth, imgHeight, snag.annotations);
           }
           
           yPosition += imgHeight + 10;
@@ -211,7 +292,7 @@ export function PDFExport({ snags, projectName }: PDFExportProps) {
               
               // Format annotation text with number and content
               const annotationText = `${index + 1}. ${annotation.text}`;
-              const splitAnnotation = doc.splitTextToSize(annotationText, contentWidth - 10); // Reduced width for better readability
+              const splitAnnotation = doc.splitTextToSize(annotationText, contentWidth - 10);
               
               // Check if we need a new page for this annotation
               if (yPosition + (splitAnnotation.length * 5) > pageHeight - margin) {

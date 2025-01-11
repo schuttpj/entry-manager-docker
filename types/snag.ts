@@ -15,8 +15,9 @@ export interface Snag {
   photoPath: string;
   priority: 'Low' | 'Medium' | 'High';
   assignedTo: string;
-  status: 'Open' | 'In Progress' | 'Completed';
+  status: 'In Progress' | 'Completed';
   createdAt: string | Date;
   updatedAt: string | Date;
+  completionDate: string | Date | null;
   annotations: Annotation[];
 } 

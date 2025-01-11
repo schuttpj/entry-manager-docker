@@ -47,7 +47,19 @@ export const SnagListItem: FC<SnagListItemProps> = ({
   const priorityColors = getPriorityColor(snag.priority);
 
   return (
-    <Card className="p-6 mb-4 hover:shadow-md transition-shadow duration-200">
+    <Card className="p-6 mb-4 hover:shadow-md transition-shadow duration-200 relative overflow-hidden">
+      {snag.status === 'Completed' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="transform rotate-[-30deg] text-green-600/25 dark:text-green-500/25 flex flex-col items-center select-none">
+            <span className="text-[120px] font-bold tracking-wider">COMPLETED</span>
+            {snag.completionDate && (
+              <span className="text-[30px] font-medium -mt-8">
+                {formatDate(snag.completionDate)}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
       <div className="flex gap-8">
         {/* Selection Checkbox */}
         {onToggleSelect && (
@@ -76,7 +88,21 @@ export const SnagListItem: FC<SnagListItemProps> = ({
         <div className="flex-grow space-y-6">
           <div className="flex justify-between items-start">
             <div>
-              <h3 className="text-xl font-semibold">Snag #{snag.snagNumber}</h3>
+              <h3 className={`text-xl font-semibold ${
+                snag.status === 'Completed' ? 'text-green-600 font-bold' : ''
+              }`}>
+                Snag #{snag.snagNumber}
+                {snag.status === 'Completed' && snag.completionDate && (
+                  <span className="ml-2 text-sm font-normal text-gray-500">
+                    Completed: {formatDate(snag.completionDate)}
+                  </span>
+                )}
+                {snag.status === 'Completed' && !snag.completionDate && (
+                  <span className="ml-2 text-sm font-normal text-gray-500">
+                    Completion Date: Not Updated yet
+                  </span>
+                )}
+              </h3>
               <p className="text-sm text-gray-500 mt-1">Created {formattedDate}</p>
               <p className="text-base text-gray-700 mt-2">{snag.name || 'Untitled Snag'}</p>
             </div>
@@ -189,11 +215,10 @@ const getPriorityColor = (priority: string) => {
   }
 };
 
-const getStatusVariant = (status: string): "default" | "secondary" | "outline" => {
+const getStatusVariant = (status: string): "secondary" | "outline" => {
   switch (status.toLowerCase()) {
-    case 'open': return 'default';
     case 'in progress': return 'secondary';
     case 'completed': return 'outline';
-    default: return 'default';
+    default: return 'secondary';
   }
 }; 

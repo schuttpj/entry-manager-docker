@@ -62,7 +62,7 @@ export function UploadArea({
                   photoPath: compressedImage,
                   priority: 'Medium',
                   assignedTo: '',
-                  status: 'Open'
+                  status: 'In Progress'
                 });
                 resolve(null);
               }

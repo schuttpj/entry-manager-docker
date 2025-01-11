@@ -35,7 +35,7 @@ interface SnagListDBSchema {
       photoPath: string;
       priority: 'Low' | 'Medium' | 'High';
       assignedTo: string;
-      status: 'Open' | 'In Progress' | 'Completed';
+      status: 'In Progress' | 'Completed';
       createdAt: Date;
       updatedAt: Date;
       annotations: Annotation[];
@@ -62,11 +62,12 @@ interface SnagUpdate {
   description?: string;
   priority?: 'Low' | 'Medium' | 'High';
   assignedTo?: string;
-  status?: 'Open' | 'In Progress' | 'Completed';
+  status?: 'In Progress' | 'Completed';
+  completionDate?: string | Date | null;
 }
 
 const DB_NAME = 'snag-list-db';
-const DB_VERSION = 7;
+const DB_VERSION = 9;
 
 export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
   try {
@@ -90,6 +91,20 @@ export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
           for (const snag of snags) {
             if (!snag.name) {
               snag.name = snag.description ? snag.description.split(/\s+/).slice(0, 5).join(' ') : 'Untitled Snag';
+              await store.put(snag);
+            }
+          }
+        }
+
+        // Version 8: Update 'Open' status to 'In Progress'
+        if (oldVersion < 8) {
+          const store = db.transaction('snags', 'readwrite').objectStore('snags');
+          const snags = await store.getAll();
+          
+          for (const snag of snags) {
+            if (snag.status === 'Open') {
+              snag.status = 'In Progress';
+              snag.updatedAt = new Date();
               await store.put(snag);
             }
           }
@@ -237,7 +252,7 @@ export async function addSnag(snag: Omit<SnagListDB['snags']['value'], 'id' | 'c
         snagNumber,
         priority: snag.priority || 'Medium',
         assignedTo: snag.assignedTo || '',
-        status: snag.status || 'Open',
+        status: snag.status || 'In Progress',
         annotations: [],
         createdAt: now,
         updatedAt: now,

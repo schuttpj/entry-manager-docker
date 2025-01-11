@@ -1,12 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { getSnagsByProject, deleteSnag, updateSnag, updateSnagAnnotations, getSnag } from '@/lib/db';
-import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare, AlertCircle } from 'lucide-react';
+import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare, AlertCircle, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 import { Annotation, Snag } from '@/types/snag';
 import ImageAnnotator from './ImageAnnotator';
 import { SnagListItem } from './SnagListItem';
 import { PDFExport } from './PDFExport';
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -22,7 +29,7 @@ interface EditState {
   description: string;
   priority: 'Low' | 'Medium' | 'High';
   assignedTo: string;
-  status: 'Open' | 'In Progress' | 'Completed';
+  status: 'In Progress' | 'Completed';
   name: string;
 }
 
@@ -44,7 +51,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
     description: '',
     priority: 'Medium',
     assignedTo: '',
-    status: 'Open',
+    status: 'In Progress',
     name: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
@@ -54,6 +61,9 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
   const [annotatingSnag, setAnnotatingSnag] = useState<Snag | null>(null);
   const imageRefs = useRef<{ [key: string]: HTMLImageElement }>({});
   const [error, setError] = useState<string | null>(null);
+  const [completionDateDialogOpen, setCompletionDateDialogOpen] = useState(false);
+  const [completionDate, setCompletionDate] = useState<string>('');
+  const [snagToComplete, setSnagToComplete] = useState<Snag | null>(null);
 
   // Add this function to calculate actual position
   const calculatePinPosition = (annotation: Annotation, image: HTMLImageElement) => {
@@ -129,6 +139,10 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
     if (searchTerm) {
       filtered = filtered.filter(snag => 
         snag.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        snag.assignedTo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        snag.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        snag.priority.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        snag.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
         snag.annotations?.some(annotation => 
           annotation.text.toLowerCase().includes(searchTerm.toLowerCase())
         )
@@ -189,7 +203,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
       description: '',
       priority: 'Medium',
       assignedTo: '',
-      status: 'Open',
+      status: 'In Progress',
       name: ''
     });
   };
@@ -306,6 +320,34 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
 
   const handleViewAnnotations = (snag: Snag) => {
     setAnnotatingSnag(snag);
+  };
+
+  const handleStatusChange = (value: 'In Progress' | 'Completed') => {
+    if (value === 'Completed') {
+      setSnagToComplete(snags.find(s => s.id === editingId) || null);
+      setCompletionDateDialogOpen(true);
+    } else {
+      setEditState(prev => ({
+        ...prev,
+        status: value,
+        completionDate: null
+      }));
+    }
+  };
+
+  const handleCompletionDateSubmit = () => {
+    if (!completionDate) {
+      setCompletionDateDialogOpen(false);
+      return;
+    }
+
+    setEditState(prev => ({
+      ...prev,
+      status: 'Completed',
+      completionDate: new Date(completionDate)
+    }));
+    setCompletionDateDialogOpen(false);
+    setCompletionDate('');
   };
 
   if (loading) {
@@ -480,13 +522,12 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
                       <Label htmlFor="status">Status</Label>
                       <Select
                         value={editState.status}
-                        onValueChange={(value) => setEditState(prev => ({ ...prev, status: value as 'Open' | 'In Progress' | 'Completed' }))}
+                        onValueChange={handleStatusChange}
                       >
                         <SelectTrigger id="status" className="mt-1">
                           <SelectValue placeholder="Select status" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Open">Open</SelectItem>
                           <SelectItem value="In Progress">In Progress</SelectItem>
                           <SelectItem value="Completed">Completed</SelectItem>
                         </SelectContent>
@@ -592,6 +633,50 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
           </button>
         </div>
       )}
+
+      {/* Completion Date Dialog */}
+      <Dialog open={completionDateDialogOpen} onOpenChange={setCompletionDateDialogOpen}>
+        <DialogContent className="bg-white dark:bg-gray-800 border-0 shadow-lg sm:max-w-[425px]">
+          <DialogHeader className="space-y-3 pb-4 border-b">
+            <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">Set Completion Date</DialogTitle>
+            <DialogDescription className="text-gray-500 dark:text-gray-400">
+              Please enter the completion date for this snag.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-6">
+            <div className="flex items-center gap-4">
+              <Label htmlFor="completionDate" className="min-w-[80px] text-gray-700 dark:text-gray-300">
+                Date
+              </Label>
+              <Input
+                id="completionDate"
+                type="date"
+                value={completionDate}
+                onChange={(e) => setCompletionDate(e.target.value)}
+                className="flex-1 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div className="pt-4 border-t flex justify-end gap-3">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setCompletionDateDialogOpen(false);
+                setEditState(prev => ({ ...prev, status: 'In Progress' }));
+              }}
+              className="bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCompletionDateSubmit}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 
