@@ -36,6 +36,7 @@ interface SnagListDBSchema {
       priority: 'Low' | 'Medium' | 'High';
       assignedTo: string;
       status: 'In Progress' | 'Completed';
+      location: string;
       createdAt: Date;
       updatedAt: Date;
       annotations: Annotation[];
@@ -63,11 +64,12 @@ interface SnagUpdate {
   priority?: 'Low' | 'Medium' | 'High';
   assignedTo?: string;
   status?: 'In Progress' | 'Completed';
+  location?: string;
   completionDate?: string | Date | null;
 }
 
 const DB_NAME = 'snag-list-db';
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 
 export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
   try {
@@ -104,6 +106,20 @@ export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
           for (const snag of snags) {
             if (snag.status === 'Open') {
               snag.status = 'In Progress';
+              snag.updatedAt = new Date();
+              await store.put(snag);
+            }
+          }
+        }
+
+        // Version 10: Add location field to snags
+        if (oldVersion < 10) {
+          const store = db.transaction('snags', 'readwrite').objectStore('snags');
+          const snags = await store.getAll();
+          
+          for (const snag of snags) {
+            if (!snag.location) {
+              snag.location = '';  // Initialize with empty string
               snag.updatedAt = new Date();
               await store.put(snag);
             }
@@ -253,6 +269,7 @@ export async function addSnag(snag: Omit<SnagListDB['snags']['value'], 'id' | 'c
         priority: snag.priority || 'Medium',
         assignedTo: snag.assignedTo || '',
         status: snag.status || 'In Progress',
+        location: snag.location || '',
         annotations: [],
         createdAt: now,
         updatedAt: now,

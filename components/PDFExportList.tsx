@@ -39,65 +39,7 @@ const compressImage = async (imageUrl: string, maxWidth = 800): Promise<string> 
         // Draw the original image
         ctx.drawImage(img, 0, 0, width, height);
         
-        // If the snag is completed, add watermark
-        if ((window as any).currentSnagStatus === 'Completed') {
-          const fontSize = Math.min(width * 0.2, 50); // Smaller font size for the list view
-          ctx.save();
-          
-          // Rotate canvas for watermark
-          ctx.translate(width/2, height/2);
-          ctx.rotate(-30 * Math.PI / 180);
-          ctx.translate(-width/2, -height/2);
-          
-          // Add "COMPLETED" text
-          ctx.font = `bold ${fontSize}px Arial`;
-          ctx.fillStyle = 'rgba(34, 197, 94, 0.5)'; // text-green-600 with opacity
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('COMPLETED', width/2, height/2);
-          
-          // Add completion date if available
-          if ((window as any).currentSnagCompletionDate) {
-            ctx.font = `bold ${fontSize * 0.35}px Arial`;
-            ctx.fillText(
-              new Date((window as any).currentSnagCompletionDate).toLocaleDateString(),
-              width/2,
-              height/2 + fontSize
-            );
-          }
-          
-          ctx.restore();
-        }
-        
-        // Draw annotations if they exist
-        if ((window as any).currentSnagAnnotations) {
-          ctx.fillStyle = 'red';
-          ctx.strokeStyle = 'white';
-          ctx.lineWidth = 2;
-          ctx.font = '12px Arial'; // Smaller font for annotations in list view
-          
-          (window as any).currentSnagAnnotations.forEach((annotation: any, index: number) => {
-            const x = (annotation.x / 100) * width;
-            const y = (annotation.y / 100) * height;
-            const size = 16; // Smaller fixed size for pins in list view
-            
-            // Draw circle
-            ctx.beginPath();
-            ctx.arc(x, y, size/2, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-            
-            // Draw number
-            ctx.fillStyle = 'white';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText((index + 1).toString(), x, y);
-            
-            // Reset fill style for next circle
-            ctx.fillStyle = 'red';
-          });
-        }
-        
+        // Remove the watermark code from here since it's handled by the PDF generation
         resolve(canvas.toDataURL('image/jpeg', 0.8));
       } catch (err) {
         reject(err);
@@ -106,6 +48,89 @@ const compressImage = async (imageUrl: string, maxWidth = 800): Promise<string> 
     
     img.onerror = () => reject(new Error("Failed to load image"));
     img.src = imageUrl;
+  });
+};
+
+// Add watermark for completed snags
+const addCompletedWatermark = (
+  doc: jsPDF,
+  imageX: number,
+  imageY: number,
+  imageWidth: number,
+  imageHeight: number,
+  completionDate: string | Date | null
+) => {
+  const centerX = imageX + imageWidth / 2;
+  const centerY = imageY + imageHeight / 2;
+  
+  // Calculate text size based on image width
+  const fontSize = Math.min(imageWidth * 0.2, 30); // Smaller font size for list view
+  
+  // Add "COMPLETED" text centered on the image
+  doc.setFontSize(fontSize);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(34, 197, 94); // text-green-600
+  
+  const completedText = "COMPLETED";
+  // Move the main text up by half the date height to center the whole watermark
+  const dateOffset = completionDate ? fontSize * 0.8 : 0;
+  doc.text(
+    completedText,
+    centerX,
+    centerY - (dateOffset / 2),
+    {
+      align: 'center',
+      angle: -30
+    }
+  );
+  
+  // Add completion date if available
+  if (completionDate) {
+    doc.setFontSize(fontSize * 0.35);
+    doc.setFont(undefined, 'bold');
+    const dateText = format(new Date(completionDate), 'MMM d, yyyy');
+    
+    doc.text(
+      dateText,
+      centerX,
+      centerY + (dateOffset / 2),
+      {
+        align: 'center',
+        angle: -30
+      }
+    );
+  }
+};
+
+// Add function to draw annotation pins
+const drawAnnotationPins = (
+  doc: jsPDF,
+  imageX: number,
+  imageY: number,
+  imageWidth: number,
+  imageHeight: number,
+  annotations: any[]
+) => {
+  if (!annotations?.length) return;
+
+  annotations.forEach((pin, index) => {
+    const pinX = imageX + (pin.x * imageWidth) / 100;
+    const pinY = imageY + (pin.y * imageHeight) / 100;
+    
+    // Draw pin circle with border
+    doc.setFillColor(255, 0, 0);
+    doc.circle(pinX, pinY, 1.5, 'F');
+    doc.setDrawColor(255, 255, 255);
+    doc.circle(pinX, pinY, 1.5, 'S');
+    
+    // Draw pin number
+    const number = (index + 1).toString();
+    doc.setFillColor(255, 255, 255);
+    doc.circle(pinX, pinY, 1.2, 'F');
+    doc.setFontSize(6);
+    doc.setTextColor(0, 0, 0);
+    const textWidth = doc.getTextWidth(number);
+    doc.text(number, pinX - (textWidth/2), pinY + 0.5);
   });
 };
 
@@ -157,6 +182,7 @@ export default function PDFExportList({ snags, projectName }: PDFExportListProps
       interface ColumnWidths {
         nr: number;
         name: number;
+        location: number;
         description: number;
         date: number;
         completion: number;
@@ -168,14 +194,15 @@ export default function PDFExportList({ snags, projectName }: PDFExportListProps
       
       const colWidths: ColumnWidths = {
         nr: 12,          // For "Nr"
-        name: 55,        // For "Name"
-        description: 64, // Reduced by 20% from 80
+        name: 45,        // For "Name" (reduced to make space for location)
+        location: 35,    // For "Location"
+        description: 54, // Reduced for better fit
         date: 18,        // For stacked "Creation\nDate"
         completion: 18,  // For stacked "Completed\nDate"
         status: 22,      // For "Status"
         photo: 45,       // For "Photo"
         notes: 25,       // For "Notes"
-        assigned: 38     // Increased for "Assigned" (using space from description)
+        assigned: 38     // For "Assigned"
       };
 
       // Validate total width matches content width
@@ -189,7 +216,8 @@ export default function PDFExportList({ snags, projectName }: PDFExportListProps
 
       const headers = [
         'Nr', 
-        'Name', 
+        'Name',
+        'Location',
         'Description', 
         'Creation\nDate', 
         'Completed\nDate', 
@@ -343,6 +371,12 @@ export default function PDFExportList({ snags, projectName }: PDFExportListProps
           doc.text(nameLines, xPosition + 3, yPosition);
           xPosition += colWidths.name;
 
+          // LOCATION - left aligned with padding
+          doc.setFont(undefined, 'normal');
+          const locationLines = doc.splitTextToSize(snag.location || 'No location', colWidths.location - 6);
+          doc.text(locationLines, xPosition + 3, yPosition);
+          xPosition += colWidths.location;
+
           // DESCRIPTION - left aligned with more padding
           doc.setFont(undefined, 'normal');
           const descriptionLines = doc.splitTextToSize(snag.description || 'No description', colWidths.description - 6);
@@ -381,6 +415,30 @@ export default function PDFExportList({ snags, projectName }: PDFExportListProps
               imgWidth, 
               imgHeight
             );
+
+            // Add watermark for completed snags
+            if (snag.status === 'Completed') {
+              addCompletedWatermark(
+                doc,
+                xPosition + xOffset,
+                yPosition - 2 + yOffset,
+                imgWidth,
+                imgHeight,
+                snag.completionDate
+              );
+            }
+
+            // Add annotation pins
+            if (snag.annotations?.length) {
+              drawAnnotationPins(
+                doc,
+                xPosition + xOffset,
+                yPosition - 2 + yOffset,
+                imgWidth,
+                imgHeight,
+                snag.annotations
+              );
+            }
           }
           xPosition += photoWidth;
 

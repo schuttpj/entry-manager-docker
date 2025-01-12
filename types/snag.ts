@@ -16,6 +16,7 @@ export interface Snag {
   priority: 'Low' | 'Medium' | 'High';
   assignedTo: string;
   status: 'In Progress' | 'Completed';
+  location: string;
   createdAt: string | Date;
   updatedAt: string | Date;
   completionDate: string | Date | null;

@@ -10,7 +10,8 @@ import {
   Calendar,
   Pencil,
   Trash2,
-  Paperclip
+  Paperclip,
+  MapPin
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { Snag } from '@/types/snag';
@@ -47,82 +48,89 @@ export const SnagListItem: FC<SnagListItemProps> = ({
   const priorityColors = getPriorityColor(snag.priority);
 
   return (
-    <Card className="p-6 mb-4 hover:shadow-md transition-shadow duration-200 relative overflow-hidden">
+    <Card className="p-4 mb-3 hover:shadow-md transition-shadow duration-200 relative overflow-hidden">
       {snag.status === 'Completed' && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="transform rotate-[-30deg] text-green-600/25 dark:text-green-500/25 flex flex-col items-center select-none">
-            <span className="text-[120px] font-bold tracking-wider">COMPLETED</span>
+          <div className="transform rotate-[-30deg] text-green-600/20 dark:text-green-500/20 flex flex-col items-center select-none">
+            <span className="text-[72px] font-bold tracking-wider">COMPLETED</span>
             {snag.completionDate && (
-              <span className="text-[30px] font-medium -mt-8">
+              <span className="text-[18px] font-medium -mt-4">
                 {formatDate(snag.completionDate)}
               </span>
             )}
           </div>
         </div>
       )}
-      <div className="flex gap-8">
+      <div className="flex gap-4">
         {/* Selection Checkbox */}
         {onToggleSelect && (
-          <div className="flex items-start pt-2">
+          <div className="flex items-start pt-1">
             <Checkbox
               checked={isSelected}
               onCheckedChange={() => onToggleSelect(snag)}
-              className="h-5 w-5 border-2 rounded-sm data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 transition-colors duration-200"
+              className="h-4 w-4 border-2 rounded-sm data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 transition-colors duration-200"
             />
           </div>
         )}
 
         {/* Image Section */}
-        <div className="relative w-[240px] h-[240px] flex-shrink-0">
+        <div className="relative w-[200px] h-[200px] flex-shrink-0">
           <Image
             src={snag.photoPath}
             alt={`Snag #${snag.snagNumber}`}
             className="object-cover w-full h-full rounded-lg border border-gray-200"
-            width={240}
-            height={240}
+            width={200}
+            height={200}
             priority
           />
         </div>
 
         {/* Content Section */}
-        <div className="flex-grow space-y-6">
-          <div className="flex justify-between items-start">
-            <div>
-              <h3 className={`text-xl font-semibold ${
-                snag.status === 'Completed' ? 'text-green-600 font-bold' : ''
-              }`}>
-                Snag #{snag.snagNumber}
-                {snag.status === 'Completed' && snag.completionDate && (
-                  <span className="ml-2 text-sm font-normal text-gray-500">
-                    Completed: {formatDate(snag.completionDate)}
-                  </span>
-                )}
-                {snag.status === 'Completed' && !snag.completionDate && (
-                  <span className="ml-2 text-sm font-normal text-gray-500">
-                    Completion Date: Not Updated yet
-                  </span>
-                )}
-              </h3>
-              <p className="text-sm text-gray-500 mt-1">Created {formattedDate}</p>
-              <p className="text-base text-gray-700 mt-2">{snag.name || 'Untitled Snag'}</p>
+        <div className="flex-grow min-w-0">
+          <div className="flex justify-between items-start gap-4 mb-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className={`text-lg font-semibold truncate ${
+                  snag.status === 'Completed' ? 'text-green-600 font-bold' : ''
+                }`}>
+                  Snag #{snag.snagNumber} - {snag.name || 'Untitled Snag'}
+                </h3>
+                <Badge variant={getStatusVariant(snag.status)} className="text-xs px-2 py-0.5">
+                  {snag.status}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                <div className="flex items-center gap-1">
+                  <Calendar className="w-4 h-4" />
+                  {formattedDate}
+                </div>
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-4 h-4" />
+                  {snag.location || 'No location'}
+                </div>
+                <div className="flex items-center gap-1">
+                  <User className="w-4 h-4" />
+                  {snag.assignedTo || 'Unassigned'}
+                </div>
+              </div>
             </div>
             
             {/* Actions Section */}
-            <div className="flex gap-2">
+            <div className="flex gap-1 flex-shrink-0">
               <div className="relative">
                 <Button
                   variant="ghost"
-                  size="icon"
+                  size="sm"
                   onClick={() => onViewAnnotations(snag)}
-                  className="h-9 w-9"
+                  className="h-8 w-8"
                   title="View annotations"
                 >
-                  <MessageSquare className="w-5 h-5" />
+                  <MessageSquare className="w-4 h-4" />
                 </Button>
                 {snag.annotations && snag.annotations.length > 0 && (
                   <Badge 
                     variant="secondary" 
-                    className="absolute -top-2 -right-2 h-5 min-w-[20px] px-1.5 text-xs"
+                    className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 text-xs"
                   >
                     {snag.annotations.length}
                   </Badge>
@@ -130,73 +138,63 @@ export const SnagListItem: FC<SnagListItemProps> = ({
               </div>
               <Button
                 variant="ghost"
-                size="icon"
+                size="sm"
                 onClick={() => onEdit(snag)}
-                className="h-9 w-9"
+                className="h-8 w-8"
                 title="Edit snag"
               >
-                <Pencil className="w-5 h-5" />
+                <Pencil className="w-4 h-4" />
               </Button>
               <Button
                 variant="ghost"
-                size="icon"
+                size="sm"
                 onClick={() => onDelete(snag.id)}
-                className="h-9 w-9"
+                className="h-8 w-8"
                 title="Delete snag"
               >
-                <Trash2 className="w-5 h-5" />
+                <Trash2 className="w-4 h-4" />
               </Button>
             </div>
           </div>
 
-          <div className="flex gap-8">
+          <div className="flex gap-4">
             {/* Description Section */}
             <div className="flex-grow">
-              <div className="text-sm font-medium text-gray-500 mb-2">Description</div>
-              <p className="text-sm text-gray-700">{snag.description || 'No description provided'}</p>
+              <div className="text-sm font-medium text-gray-500 mb-1.5">Description</div>
+              <p className="text-sm text-gray-700 line-clamp-3">{snag.description || 'No description provided'}</p>
             </div>
 
-            {/* Metadata Section - Stacked vertically */}
-            <div className="w-48 space-y-4">
-              <div className="space-y-1.5">
-                <div className="text-sm font-medium text-gray-500">Priority</div>
-                <Badge 
-                  style={{
-                    backgroundColor: priorityColors.bg,
-                    color: priorityColors.color,
-                  }}
-                  className="text-sm px-3 py-1"
-                >
-                  {snag.priority}
-                </Badge>
-              </div>
-              <div className="space-y-1.5">
-                <div className="text-sm font-medium text-gray-500">Status</div>
-                <Badge variant={getStatusVariant(snag.status)} className="text-sm px-3 py-1">
-                  {snag.status}
-                </Badge>
-              </div>
-              <div className="space-y-1.5">
-                <div className="text-sm font-medium text-gray-500">Assigned To</div>
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-gray-400" />
-                  <span>{snag.assignedTo || 'Unassigned'}</span>
-                </div>
-              </div>
+            {/* Priority Badge */}
+            <div className="flex-shrink-0">
+              <div className="text-sm font-medium text-gray-500 mb-1.5">Priority</div>
+              <Badge 
+                style={{
+                  backgroundColor: priorityColors.bg,
+                  color: priorityColors.color,
+                }}
+                className="text-xs px-2 py-0.5"
+              >
+                {snag.priority}
+              </Badge>
             </div>
           </div>
 
           {/* Annotations Section */}
           {snag.annotations && snag.annotations.length > 0 && (
-            <div className="pt-4">
-              <div className="text-sm font-medium text-gray-500 mb-3">Annotations</div>
-              <div className="space-y-3 max-h-[120px] overflow-y-auto pr-4">
-                {snag.annotations.map((annotation, index) => (
-                  <div key={annotation.id} className="flex items-start gap-3 text-sm bg-gray-50 p-3 rounded-md">
+            <div className="mt-3">
+              <div className="text-sm font-medium text-gray-500 mb-2">Latest Annotations</div>
+              <div className="space-y-2 max-h-[80px] overflow-y-auto pr-2">
+                {snag.annotations.slice(0, 2).map((annotation, index) => (
+                  <div key={annotation.id} className="flex items-start gap-2 text-sm bg-gray-50 p-2 rounded-md">
                     <span className="text-gray-400 font-medium">{index + 1}.</span>
-                    <span>{annotation.text}</span>
+                    <span className="line-clamp-1">{annotation.text}</span>
                   </div>
                 ))}
+                {snag.annotations.length > 2 && (
+                  <div className="text-sm text-gray-500 text-right">
+                    +{snag.annotations.length - 2} more annotations
+                  </div>
+                )}
               </div>
             </div>
           )}

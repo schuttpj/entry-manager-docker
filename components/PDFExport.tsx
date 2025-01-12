@@ -190,12 +190,6 @@ export function PDFExport({ snags, projectName }: PDFExportProps) {
         doc.text(`Snag #${snag.snagNumber}`, margin + 2, yPosition + 3);
         yPosition += 15;
 
-        // Add watermark for completed snags
-        if (snag.status === 'Completed') {
-          const snagContentHeight = 200; // Approximate height for snag content
-          addCompletedWatermark(doc, margin, yPosition - 15, contentWidth, snagContentHeight, snag.completionDate);
-        }
-        
         // Reset text color and font
         doc.setTextColor(0, 0, 0);
         doc.setFont(undefined, 'normal');
@@ -204,7 +198,8 @@ export function PDFExport({ snags, projectName }: PDFExportProps) {
         doc.setFontSize(10);
         const details = [
           [`Priority: ${snag.priority}`, `Status: ${snag.status}`],
-          [`Assigned To: ${snag.assignedTo || 'Unassigned'}`, `Created: ${new Date(snag.createdAt).toLocaleDateString()}`]
+          [`Assigned To: ${snag.assignedTo || 'Unassigned'}`, `Created: ${new Date(snag.createdAt).toLocaleDateString()}`],
+          [`Location: ${snag.location || 'No location specified'}`]
         ];
         
         details.forEach(row => {
@@ -258,7 +253,7 @@ export function PDFExport({ snags, projectName }: PDFExportProps) {
           const xOffset = (contentWidth - imgWidth) / 2;
           doc.addImage(compressedImage, 'JPEG', margin + xOffset, yPosition, imgWidth, imgHeight);
           
-          // Add watermark for completed snags (moved here to overlay the image)
+          // Add watermark for completed snags
           if (snag.status === 'Completed') {
             addCompletedWatermark(
               doc,

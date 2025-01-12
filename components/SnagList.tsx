@@ -32,6 +32,7 @@ interface EditState {
   assignedTo: string;
   status: 'In Progress' | 'Completed';
   name: string;
+  location: string;
 }
 
 interface SnagListProps {
@@ -53,7 +54,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
     priority: 'Medium',
     assignedTo: '',
     status: 'In Progress',
-    name: ''
+    name: '',
+    location: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -139,13 +141,14 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
     // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(snag => 
-        snag.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        snag.assignedTo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        snag.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        snag.priority.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        snag.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (snag.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (snag.assignedTo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (snag.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (snag.priority || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (snag.status || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (snag.location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         snag.annotations?.some(annotation => 
-          annotation.text.toLowerCase().includes(searchTerm.toLowerCase())
+          (annotation.text || '').toLowerCase().includes(searchTerm.toLowerCase())
         )
       );
     }
@@ -190,11 +193,12 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
   const startEditing = (snag: Snag) => {
     setEditingId(snag.id);
     setEditState({
-      description: snag.description,
+      description: snag.description || '',
       priority: snag.priority,
-      assignedTo: snag.assignedTo,
+      assignedTo: snag.assignedTo || '',
       status: snag.status,
-      name: snag.name
+      name: snag.name || '',
+      location: snag.location || ''
     });
   };
 
@@ -205,7 +209,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
       priority: 'Medium',
       assignedTo: '',
       status: 'In Progress',
-      name: ''
+      name: '',
+      location: ''
     });
   };
 
@@ -401,6 +406,16 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
             <h2 className={`text-xl font-semibold transition-colors duration-300 ${
               isDarkMode ? 'text-white' : 'text-gray-900'
             }`}>Snag List</h2>
+            <div className="relative w-full sm:w-[200px]">
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search snags..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 w-full h-8 text-sm"
+              />
+            </div>
             {filteredSnags.length > 0 && (
               <div
                 className="flex items-center gap-2 h-9 px-4 py-2 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer"
@@ -471,7 +486,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
                       <Label htmlFor="name">Name</Label>
                       <Input
                         id="name"
-                        value={editState.name}
+                        value={editState.name || ''}
                         onChange={(e) => setEditState(prev => ({ ...prev, name: e.target.value }))}
                         className="mt-1"
                       />
@@ -480,8 +495,17 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
                       <Label htmlFor="description">Description</Label>
                       <Input
                         id="description"
-                        value={editState.description}
+                        value={editState.description || ''}
                         onChange={(e) => setEditState(prev => ({ ...prev, description: e.target.value }))}
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="location">Location</Label>
+                      <Input
+                        id="location"
+                        value={editState.location || ''}
+                        onChange={(e) => setEditState(prev => ({ ...prev, location: e.target.value }))}
                         className="mt-1"
                       />
                     </div>
@@ -489,7 +513,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
                       <Label htmlFor="assignedTo">Assigned To</Label>
                       <Input
                         id="assignedTo"
-                        value={editState.assignedTo}
+                        value={editState.assignedTo || ''}
                         onChange={(e) => setEditState(prev => ({ ...prev, assignedTo: e.target.value }))}
                         className="mt-1"
                       />
@@ -498,7 +522,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
                       <Label htmlFor="priority">Priority</Label>
                       <Select
                         value={editState.priority}
-                        onValueChange={(value) => setEditState(prev => ({ ...prev, priority: value as 'Low' | 'Medium' | 'High' }))}
+                        onValueChange={(value: 'Low' | 'Medium' | 'High') => setEditState(prev => ({ ...prev, priority: value }))}
                       >
                         <SelectTrigger id="priority" className="mt-1">
                           <SelectValue placeholder="Select priority" />
