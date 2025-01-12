@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getSnagsByProject, deleteSnag, updateSnag, updateSnagAnnotations, getSnag } from '@/lib/db';
-import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare, AlertCircle, Calendar } from 'lucide-react';
+import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare, AlertCircle, Calendar, Grid } from 'lucide-react';
 import { format } from 'date-fns';
 import { Annotation, Snag } from '@/types/snag';
 import ImageAnnotator from './ImageAnnotator';
@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import confetti from 'canvas-confetti';
 import { toast } from 'sonner';
+import { GridView } from './GridView';
 
 interface EditState {
   description: string;
@@ -70,6 +71,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
   const [completionDateDialogOpen, setCompletionDateDialogOpen] = useState(false);
   const [completionDate, setCompletionDate] = useState<string>('');
   const [snagToComplete, setSnagToComplete] = useState<Snag | null>(null);
+  const [isGridViewOpen, setIsGridViewOpen] = useState(false);
 
   // Add this function to calculate actual position
   const calculatePinPosition = (annotation: Annotation, image: HTMLImageElement) => {
@@ -489,6 +491,15 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
               </SelectContent>
             </Select>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setIsGridViewOpen(true)}
+                className="h-9 w-9"
+              >
+                <Grid className="h-4 w-4" />
+                <span className="sr-only">Grid View</span>
+              </Button>
               <PDFExport 
                 snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))} 
                 projectName={projectName} 
@@ -727,6 +738,54 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Add GridView component */}
+      <GridView
+        snags={filteredSnags}
+        isOpen={isGridViewOpen}
+        onClose={() => setIsGridViewOpen(false)}
+        isDarkMode={isDarkMode}
+        onSnagUpdate={async (updatedSnag) => {
+          try {
+            // First update the database
+            await updateSnag(updatedSnag.id, {
+              name: updatedSnag.name,
+              description: updatedSnag.description,
+              status: updatedSnag.status,
+              priority: updatedSnag.priority,
+              location: updatedSnag.location,
+              assignedTo: updatedSnag.assignedTo
+            });
+
+            // Update both snags and filteredSnags states
+            const newSnag = {
+              ...updatedSnag,
+              updatedAt: new Date().toISOString(),
+              ...(updatedSnag.status === 'Completed' && { completionDate: new Date().toISOString() })
+            };
+
+            setSnags(prevSnags => 
+              prevSnags.map(s => s.id === updatedSnag.id ? newSnag : s)
+            );
+
+            // Show success toast
+            toast.success('Changes saved successfully', {
+              duration: 3000,
+              className: isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
+            });
+
+            // Trigger a refresh to ensure all views are in sync
+            handleUploadComplete();
+          } catch (error) {
+            console.error('Error updating snag:', error);
+            // Show error toast
+            toast.error('Failed to save changes', {
+              duration: 3000,
+              className: isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
+            });
+          }
+        }}
+      />
     </div>
   );
 } 
