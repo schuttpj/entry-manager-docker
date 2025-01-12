@@ -301,7 +301,7 @@ export default function PDFExportList({ snags, projectName }: PDFExportListProps
           // Name - left aligned with photo
           doc.setFontSize(fontSizes.heading);
           doc.setFont(undefined, 'bold');
-          doc.text(snag.name || 'Untitled Snag', xPosition + 3, yPosition);
+          doc.text(snag.name || 'Untitled Entry', xPosition + 3, yPosition);
 
           // Photo with annotations
           if (photoBase64) {

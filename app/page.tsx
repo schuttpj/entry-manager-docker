@@ -7,13 +7,12 @@ import { SnagList } from "@/components/SnagList"
 import { NewProjectDialog } from "@/components/NewProjectDialog"
 import { AIVoiceAssistant } from "@/components/AIVoiceAssistant"
 import { addProject } from "@/lib/db"
-import { Moon, Sun } from "lucide-react"
 
 export default function Home() {
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [isDarkMode] = useState(false);
 
   const handleProjectSelect = (projectName: string) => {
     setSelectedProject(projectName);
@@ -33,34 +32,14 @@ export default function Home() {
     }
   };
 
-  const toggleDarkMode = () => {
-    setIsDarkMode(!isDarkMode);
-    document.documentElement.classList.toggle('dark');
-  };
-
   return (
-    <main className={`min-h-screen p-4 transition-colors duration-300 ${
-      isDarkMode ? 'dark bg-gray-900' : 'bg-gray-50'
-    }`}>
+    <main className="min-h-screen p-4 bg-gray-50">
       <div className="max-w-7xl mx-auto space-y-4">
         {/* Header */}
         <header className="flex justify-between items-center mb-6">
-          <h1 className={`text-2xl font-bold transition-colors duration-300 ${
-            isDarkMode ? 'text-white' : 'text-gray-900'
-          }`}>
-            Snag List Manager
+          <h1 className="text-2xl font-bold text-gray-900">
+            Entry List Manager
           </h1>
-          <button
-            onClick={toggleDarkMode}
-            className={`p-2 rounded-lg transition-all duration-300 ${
-              isDarkMode 
-                ? 'bg-gray-800 text-gray-200 hover:bg-gray-700' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-            title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          >
-            {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-          </button>
         </header>
 
         {/* Main Content */}
@@ -91,6 +70,7 @@ export default function Home() {
               projectName={selectedProject}
               refreshTrigger={refreshTrigger}
               isDarkMode={isDarkMode}
+              handleUploadComplete={handleUploadComplete}
             />
           </section>
         </div>

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { PlusCircle, Trash2 } from 'lucide-react';
 import { getAllProjects, getAllSnags, deleteProject, getProject } from '@/lib/db';
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 interface Project {
   id: string;
@@ -87,33 +89,38 @@ export function ProjectSelector({
   };
 
   return (
-    <div className={`rounded-lg shadow p-4 transition-colors duration-300 ${
-      isDarkMode ? 'bg-gray-800' : 'bg-white'
+    <Card className={`p-4 transition-all duration-300 ${
+      isDarkMode ? 'bg-[#1a1f2e] shadow-lg' : 'bg-white/95 backdrop-blur-sm'
     }`}>
       <div className="flex justify-between items-center mb-4">
-        <h2 className={`text-lg font-medium transition-colors duration-300 ${
-          isDarkMode ? 'text-white' : 'text-gray-900'
+        <h2 className={`text-lg font-semibold transition-colors duration-300 ${
+          isDarkMode ? 'text-zinc-100' : 'text-gray-900'
         }`}>Projects</h2>
-        <button
+        <Button
           onClick={onNewProject}
-          className={`p-1.5 rounded-lg transition-all duration-300 hover:bg-gray-100 ${
+          variant="ghost"
+          size="icon"
+          className={`rounded-full transition-all duration-300 hover:scale-110 ${
             isDarkMode 
-              ? 'text-gray-200 hover:text-white hover:bg-gray-700' 
-              : 'text-gray-600 hover:text-gray-900'
+              ? 'text-zinc-400 hover:text-zinc-200 hover:bg-[#252b3b]' 
+              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
           }`}
           title="New Project"
         >
-          <PlusCircle className="w-4 h-4" />
-        </button>
+          <PlusCircle className="w-5 h-5" />
+        </Button>
       </div>
       
       <div className="space-y-2">
         {projects.length === 0 ? (
-          <p className={`text-sm text-center py-4 transition-colors duration-300 ${
-            isDarkMode ? 'text-gray-400' : 'text-gray-500'
+          <div className={`text-sm text-center py-6 rounded-lg border-2 border-dashed transition-colors duration-300 ${
+            isDarkMode 
+              ? 'text-zinc-400 border-[#252b3b]' 
+              : 'text-gray-500 border-gray-200'
           }`}>
-            No projects yet. Create your first project!
-          </p>
+            <p>No projects yet.</p>
+            <p className="mt-1 text-xs">Create your first project to get started!</p>
+          </div>
         ) : (
           projects.map((project) => (
             <div
@@ -122,41 +129,47 @@ export function ProjectSelector({
             >
               <button
                 onClick={() => onProjectSelect(project.name)}
-                className={`w-full px-4 py-2 rounded-lg text-left transition-all duration-300 ${
+                className={`w-full px-4 py-3 rounded-lg text-left transition-all duration-300 ${
                   selectedProject === project.name
                     ? isDarkMode 
-                      ? 'bg-gray-700 text-white' 
-                      : 'bg-gray-900 text-white'
+                      ? 'bg-[#252b3b] text-zinc-100 ring-2 ring-blue-500/20' 
+                      : 'bg-gray-900 text-white ring-2 ring-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]'
                     : isDarkMode
-                      ? 'hover:bg-gray-700 text-gray-200'
-                      : 'hover:bg-gray-100 text-gray-700'
+                      ? 'hover:bg-[#1e2433] text-zinc-300 hover:shadow-[0_2px_10px_rgba(0,0,0,0.2)]'
+                      : 'hover:bg-gray-50 text-gray-700 hover:shadow-md'
                 }`}
               >
                 <div className="flex justify-between items-center pr-8">
-                  <span className="font-medium">{project.name}</span>
-                  <span className={`px-2 py-1 rounded-full text-sm transition-colors duration-300 ${
+                  <span className={`font-medium transition-all duration-300 ${
+                    selectedProject === project.name 
+                      ? 'text-lg transform scale-105' 
+                      : 'group-hover:scale-105'
+                  }`}>
+                    {project.name}
+                  </span>
+                  <div className={`min-w-[80px] h-[26px] flex items-center justify-center rounded-full text-xs font-medium transition-all duration-300 ${
                     selectedProject === project.name
                       ? isDarkMode
-                        ? 'bg-gray-600 text-white'
-                        : 'bg-gray-800 text-white'
+                        ? 'bg-blue-500/10 text-blue-200'
+                        : 'bg-blue-500/20 text-blue-100'
                       : isDarkMode
-                        ? 'bg-gray-900 text-gray-200'
-                        : 'bg-gray-200 text-gray-700'
+                        ? 'bg-[#1a1f2e] text-zinc-400'
+                        : 'bg-gray-100 text-gray-600'
                   }`}>
-                    {project.count} {project.count === 1 ? 'snag' : 'snags'}
-                  </span>
+                    {project.count} {project.count === 1 ? 'entry' : 'entries'}
+                  </div>
                 </div>
               </button>
-              
+
               {/* Delete Button */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setDeleteConfirmProject(project.name);
                 }}
-                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 ${
+                className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 ${
                   isDarkMode
-                    ? 'text-gray-400 hover:text-red-400 hover:bg-gray-700'
+                    ? 'text-zinc-500 hover:text-red-400 hover:bg-[#252b3b]'
                     : 'text-gray-400 hover:text-red-600 hover:bg-gray-100'
                 }`}
                 title="Delete Project"
@@ -166,43 +179,39 @@ export function ProjectSelector({
 
               {/* Delete Confirmation Modal */}
               {deleteConfirmProject === project.name && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                  <div className={`rounded-lg p-6 max-w-md mx-4 space-y-4 transition-colors duration-300 ${
-                    isDarkMode ? 'bg-gray-800' : 'bg-white'
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                  <Card className={`p-6 max-w-md mx-4 space-y-4 transition-all duration-300 animate-in fade-in-0 zoom-in-95 ${
+                    isDarkMode ? 'bg-[#1a1f2e] text-zinc-100' : 'bg-white text-gray-900'
                   }`}>
-                    <h3 className={`text-lg font-semibold transition-colors duration-300 ${
-                      isDarkMode ? 'text-white' : 'text-gray-900'
-                    }`}>Delete Project</h3>
-                    <p className={`transition-colors duration-300 ${
-                      isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                    <h3 className="text-lg font-semibold">Delete Project</h3>
+                    <p className={`${
+                      isDarkMode ? 'text-zinc-400' : 'text-gray-600'
                     }`}>
-                      Are you sure you want to delete "{project.name}"? This will permanently delete the project and all its {project.count} snags.
+                      Are you sure you want to delete "{project.name}"? This will permanently delete the project and all its {project.count} entries.
                     </p>
-                    <div className="flex justify-end space-x-3">
-                      <button
+                    <div className="flex justify-end gap-3 pt-2">
+                      <Button
+                        variant="ghost"
                         onClick={() => setDeleteConfirmProject(null)}
-                        className={`px-4 py-2 rounded-lg transition-all duration-300 ${
-                          isDarkMode
-                            ? 'text-gray-300 hover:bg-gray-700'
-                            : 'text-gray-600 hover:bg-gray-100'
-                        }`}
+                        className={isDarkMode ? 'text-zinc-300 hover:bg-[#252b3b] hover:text-zinc-100' : 'hover:bg-gray-100'}
                       >
                         Cancel
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="destructive"
                         onClick={() => handleDeleteProject(project.id)}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all duration-300"
+                        className="hover:bg-red-700 transition-colors duration-300"
                       >
                         Delete Project
-                      </button>
+                      </Button>
                     </div>
-                  </div>
+                  </Card>
                 </div>
               )}
             </div>
           ))
         )}
       </div>
-    </div>
+    </Card>
   );
 } 

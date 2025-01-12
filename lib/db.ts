@@ -92,7 +92,7 @@ export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
           
           for (const snag of snags) {
             if (!snag.name) {
-              snag.name = snag.description ? snag.description.split(/\s+/).slice(0, 5).join(' ') : 'Untitled Snag';
+              snag.name = snag.description ? snag.description.split(/\s+/).slice(0, 5).join(' ') : 'Untitled Entry';
               await store.put(snag);
             }
           }
@@ -165,13 +165,13 @@ async function getNextSnagNumber(
 
 // Helper function to generate AI name from description
 async function generateAIName(description: string): Promise<string> {
-  if (!description) return 'Untitled Snag';
+  if (!description) return 'Untitled Entry';
   
   // Check for API key
   const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
   if (!apiKey) {
     console.warn('OpenAI API key not found. Falling back to simple text extraction.');
-    return description.split(/\s+/).slice(0, 5).join(' ') || 'Untitled Snag';
+    return description.split(/\s+/).slice(0, 5).join(' ') || 'Untitled Entry';
   }
   
   console.log('Attempting OpenAI API call for description:', description);
@@ -214,7 +214,7 @@ async function generateAIName(description: string): Promise<string> {
         console.error('Rate limit exceeded. Please try again later.');
       }
       
-      return description.split(/\s+/).slice(0, 5).join(' ') || 'Untitled Snag';
+      return description.split(/\s+/).slice(0, 5).join(' ') || 'Untitled Entry';
     }
 
     const data = await response.json();
@@ -226,12 +226,12 @@ async function generateAIName(description: string): Promise<string> {
 
     if (!data.choices?.[0]?.message?.content) {
       console.error('Unexpected API response format:', data);
-      return description.split(/\s+/).slice(0, 5).join(' ') || 'Untitled Snag';
+      return description.split(/\s+/).slice(0, 5).join(' ') || 'Untitled Entry';
     }
 
     const generatedName = data.choices[0].message.content.trim();
     console.log('Generated name from OpenAI:', generatedName);
-    return generatedName || 'Untitled Snag';
+    return generatedName || 'Untitled Entry';
   } catch (error) {
     console.error('Error generating AI name:', error);
     if (error instanceof Error) {
@@ -241,7 +241,7 @@ async function generateAIName(description: string): Promise<string> {
         name: error.name
       });
     }
-    return description.split(/\s+/).slice(0, 5).join(' ') || 'Untitled Snag';
+    return description.split(/\s+/).slice(0, 5).join(' ') || 'Untitled Entry';
   }
 }
 

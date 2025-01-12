@@ -25,6 +25,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import confetti from 'canvas-confetti';
+import { toast } from 'sonner';
 
 interface EditState {
   description: string;
@@ -39,11 +41,12 @@ interface SnagListProps {
   projectName: string;
   refreshTrigger?: number;
   isDarkMode?: boolean;
+  handleUploadComplete: () => void;
 }
 
 type SortOption = 'newest' | 'oldest' | 'priority' | 'status';
 
-export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }: SnagListProps) {
+export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, handleUploadComplete }: SnagListProps) {
   const [snags, setSnags] = useState<Snag[]>([]);
   const [filteredSnags, setFilteredSnags] = useState<Snag[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,7 +128,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
         setSnags(snagWithAnnotations);
       } catch (error) {
         console.error('Failed to load snags:', error);
-        setError('Failed to load snags. Please try refreshing the page.');
+        setError('Failed to load entries. Please try refreshing the page.');
       } finally {
         setLoading(false);
       }
@@ -180,13 +183,15 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
 
     try {
       await deleteSnag(id);
+      // Trigger refresh after successful deletion
+      handleUploadComplete();
     } catch (error) {
       console.error('Failed to delete snag:', error);
       // Revert the optimistic update
       if (snagToDelete) {
         setSnags(prev => [...prev, snagToDelete]);
       }
-      setError('Failed to delete snag. Please try again.');
+      setError('Failed to delete entry. Please try again.');
     }
   };
 
@@ -341,6 +346,34 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
     }
   };
 
+  const triggerConfetti = () => {
+    // Create a simple confetti burst
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { x: 0.5, y: 0.6 }
+    });
+
+    // Create another burst after a small delay
+    setTimeout(() => {
+      confetti({
+        particleCount: 50,
+        spread: 100,
+        origin: { x: 0.5, y: 0.6 }
+      });
+    }, 250);
+
+    // Show the celebratory toast message after a slight delay
+    setTimeout(() => {
+      toast('Well done! 🎉', {
+        description: 'You like to get things done! Well done on closing out an entry!',
+        duration: 5000,
+        position: 'top-center',
+        className: `${isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'} border-2 border-green-500`,
+      });
+    }, 600);
+  };
+
   const handleCompletionDateSubmit = () => {
     if (!completionDate) {
       setCompletionDateDialogOpen(false);
@@ -354,6 +387,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
     }));
     setCompletionDateDialogOpen(false);
     setCompletionDate('');
+    triggerConfetti(); // Trigger the confetti effect
   };
 
   if (loading) {
@@ -364,12 +398,12 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
         <div className="p-4 border-b border-gray-200">
           <h2 className={`text-xl font-semibold transition-colors duration-300 ${
             isDarkMode ? 'text-white' : 'text-gray-900'
-          }`}>Snag List</h2>
+          }`}>Entry List</h2>
         </div>
         <div className={`p-8 text-center transition-colors duration-300 ${
           isDarkMode ? 'text-gray-400' : 'text-gray-500'
         }`}>
-          Loading snags...
+          Loading entries...
         </div>
       </div>
     );
@@ -383,12 +417,12 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
         <div className="p-4 border-b border-gray-200">
           <h2 className={`text-xl font-semibold transition-colors duration-300 ${
             isDarkMode ? 'text-white' : 'text-gray-900'
-          }`}>Snag List</h2>
+          }`}>Entry List</h2>
         </div>
         <div className={`p-8 text-center transition-colors duration-300 ${
           isDarkMode ? 'text-gray-400' : 'text-gray-500'
         }`}>
-          Select a project to view snags
+          Select a project to view entries
         </div>
       </div>
     );
@@ -405,12 +439,12 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <h2 className={`text-xl font-semibold transition-colors duration-300 ${
               isDarkMode ? 'text-white' : 'text-gray-900'
-            }`}>Snag List</h2>
+            }`}>Entry List</h2>
             <div className="relative w-full sm:w-[200px]">
               <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 type="text"
-                placeholder="Search snags..."
+                placeholder="Search entries..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-8 w-full h-8 text-sm"
@@ -473,7 +507,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
         <div className={`p-8 text-center transition-colors duration-300 ${
           isDarkMode ? 'text-gray-400' : 'text-gray-500'
         }`}>
-          {searchTerm ? 'No snags match your search.' : 'No snags added yet. Upload photos to get started.'}
+          {searchTerm ? 'No entries match your search.' : 'No entries added yet. Upload photos to get started.'}
         </div>
       ) : (
         <div className="divide-y divide-gray-200">
@@ -582,11 +616,11 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
           }`}>
             <h3 className={`text-lg font-semibold transition-colors duration-300 ${
               isDarkMode ? 'text-white' : 'text-gray-900'
-            }`}>Delete Snag</h3>
+            }`}>Delete Entry</h3>
             <p className={`transition-colors duration-300 ${
               isDarkMode ? 'text-gray-300' : 'text-gray-600'
             }`}>
-              Are you sure you want to delete this snag? This action cannot be undone.
+              Are you sure you want to delete this entry? This action cannot be undone.
             </p>
             <div className="flex justify-end space-x-3">
               <button
@@ -603,7 +637,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
                 onClick={() => handleDelete(deleteConfirmId)}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all duration-300 transform hover:scale-105"
               >
-                Delete Snag
+                Delete Entry
               </button>
             </div>
           </div>
@@ -618,7 +652,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
         >
           <img
             src={zoomedImage}
-            alt="Zoomed snag"
+            alt="Zoomed entry"
             className="max-w-[90vw] max-h-[90vh] object-contain"
             onClick={e => e.stopPropagation()}
           />
@@ -656,7 +690,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false }
           <DialogHeader className="space-y-3 pb-4 border-b">
             <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">Set Completion Date</DialogTitle>
             <DialogDescription className="text-gray-500 dark:text-gray-400">
-              Please enter the completion date for this snag.
+              Please enter the completion date for this entry.
             </DialogDescription>
           </DialogHeader>
           <div className="py-6">

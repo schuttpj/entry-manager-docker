@@ -77,7 +77,7 @@ export const SnagListItem: FC<SnagListItemProps> = ({
         <div className="relative w-[200px] h-[200px] flex-shrink-0">
           <Image
             src={snag.photoPath}
-            alt={`Snag #${snag.snagNumber}`}
+            alt={`Entry #${snag.snagNumber}`}
             className="object-cover w-full h-full rounded-lg border border-gray-200"
             width={200}
             height={200}
@@ -93,7 +93,7 @@ export const SnagListItem: FC<SnagListItemProps> = ({
                 <h3 className={`text-lg font-semibold truncate ${
                   snag.status === 'Completed' ? 'text-green-600 font-bold' : ''
                 }`}>
-                  Snag #{snag.snagNumber} - {snag.name || 'Untitled Snag'}
+                  Entry #{snag.snagNumber} - {snag.name || 'Untitled Entry'}
                 </h3>
                 <Badge variant={getStatusVariant(snag.status)} className="text-xs px-2 py-0.5">
                   {snag.status}
@@ -141,7 +141,7 @@ export const SnagListItem: FC<SnagListItemProps> = ({
                 size="sm"
                 onClick={() => onEdit(snag)}
                 className="h-8 w-8"
-                title="Edit snag"
+                title="Edit entry"
               >
                 <Pencil className="w-4 h-4" />
               </Button>
@@ -150,7 +150,7 @@ export const SnagListItem: FC<SnagListItemProps> = ({
                 size="sm"
                 onClick={() => onDelete(snag.id)}
                 className="h-8 w-8"
-                title="Delete snag"
+                title="Delete entry"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>

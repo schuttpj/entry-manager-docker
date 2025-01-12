@@ -340,12 +340,12 @@ export function AIVoiceAssistant({ isDarkMode = false, projectName }: AIVoiceAss
         <div className={`mb-4 p-3 rounded-lg text-sm transition-colors duration-300 ${
           isDarkMode ? 'bg-gray-700/50 text-gray-300' : 'bg-gray-50 text-gray-600'
         }`}>
-          <p className="mb-2">Use voice commands to update snag information:</p>
+          <p className="mb-2">Use voice commands to update entry information:</p>
           <ul className="list-disc pl-5 space-y-1">
-            <li>"Update snag number [X] priority to high"</li>
-            <li>"Set status of snag [X] to in progress"</li>
-            <li>"Assign snag [X] to John"</li>
-            <li>"Add description to snag [X]: [your description]"</li>
+            <li>"Update entry number [X] priority to high"</li>
+            <li>"Set status of entry [X] to in progress"</li>
+            <li>"Assign entry [X] to John"</li>
+            <li>"Add description to entry [X]: [your description]"</li>
           </ul>
         </div>
       )}

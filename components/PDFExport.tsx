@@ -187,7 +187,7 @@ export function PDFExport({ snags, projectName }: PDFExportProps) {
           doc.setTextColor(0, 0, 0);
           doc.setFont(undefined, 'normal');
         }
-        doc.text(`Snag #${snag.snagNumber}`, margin + 2, yPosition + 3);
+        doc.text(`Entry #${snag.snagNumber}`, margin + 2, yPosition + 3);
         yPosition += 15;
 
         // Reset text color and font
