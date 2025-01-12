@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
 import { Snag } from "@/types/snag";
 import jsPDF from "jspdf";
+import { GState } from "jspdf";
 import { format } from "date-fns";
 
 interface PDFExportListProps {
@@ -36,10 +37,7 @@ const compressImage = async (imageUrl: string, maxWidth = 800): Promise<string> 
           return;
         }
         
-        // Draw the original image
         ctx.drawImage(img, 0, 0, width, height);
-        
-        // Remove the watermark code from here since it's handled by the PDF generation
         resolve(canvas.toDataURL('image/jpeg', 0.8));
       } catch (err) {
         reject(err);
@@ -64,15 +62,13 @@ const addCompletedWatermark = (
   const centerY = imageY + imageHeight / 2;
   
   // Calculate text size based on image width
-  const fontSize = Math.min(imageWidth * 0.2, 30); // Smaller font size for list view
+  const fontSize = Math.min(imageWidth * 0.15, 24);
   
-  // Add "COMPLETED" text centered on the image
   doc.setFontSize(fontSize);
   doc.setFont(undefined, 'bold');
-  doc.setTextColor(34, 197, 94); // text-green-600
+  doc.setTextColor(34, 197, 94); // Green color (text-green-600) without opacity
   
   const completedText = "COMPLETED";
-  // Move the main text up by half the date height to center the whole watermark
   const dateOffset = completionDate ? fontSize * 0.8 : 0;
   doc.text(
     completedText,
@@ -84,7 +80,6 @@ const addCompletedWatermark = (
     }
   );
   
-  // Add completion date if available
   if (completionDate) {
     doc.setFontSize(fontSize * 0.35);
     doc.setFont(undefined, 'bold');
@@ -142,20 +137,20 @@ export default function PDFExportList({ snags, projectName }: PDFExportListProps
     }
 
     try {
-      // Initialize PDF in landscape mode (A4)
+      // Initialize PDF in portrait mode (A4)
       const doc = new jsPDF({
-        orientation: "landscape",
+        orientation: "portrait",
         unit: "mm",
         format: "a4"
       });
 
-      // A4 dimensions in mm (landscape)
-      const pageWidth = 297;
-      const pageHeight = 210;
+      // A4 dimensions in mm (portrait)
+      const pageWidth = 210;
+      const pageHeight = 297;
       const margin = 15;
       const contentWidth = pageWidth - (2 * margin);
       
-      // Add project title
+      // Add project title and metadata
       doc.setFontSize(24);
       doc.setTextColor(0, 0, 0);
       doc.text(projectName, margin, margin + 5);
@@ -176,323 +171,261 @@ export default function PDFExportList({ snags, projectName }: PDFExportListProps
       doc.setDrawColor(200, 200, 200);
       doc.line(margin, margin + 25, pageWidth - margin, margin + 25);
 
-      // Table header
-      let yPosition = margin + 35;
-      // Adjust column widths for better layout - giving more space to text columns
-      interface ColumnWidths {
-        nr: number;
-        name: number;
-        location: number;
-        description: number;
-        date: number;
-        completion: number;
-        status: number;
-        photo: number;
-        notes: number;
-        assigned: number;
-      }
-      
-      const colWidths: ColumnWidths = {
-        nr: 12,          // For "Nr"
-        name: 45,        // For "Name" (reduced to make space for location)
-        location: 35,    // For "Location"
-        description: 54, // Reduced for better fit
-        date: 18,        // For stacked "Creation\nDate"
-        completion: 18,  // For stacked "Completed\nDate"
-        status: 22,      // For "Status"
-        photo: 45,       // For "Photo"
-        notes: 25,       // For "Notes"
-        assigned: 38     // For "Assigned"
+      // Define column widths for portrait layout
+      const colWidths = {
+        nr: 15,         // Keep for bold numbers
+        photo: 45,      // Keep for good photo size
+        details: 45,    // Keep
+        dates: 20,      // Keep
+        status: 20,     // Keep
+        assigned: 35    // Keep
       };
 
-      // Validate total width matches content width
-      const totalWidth = Object.values(colWidths).reduce((a, b) => a + b, 0);
-      if (totalWidth > contentWidth) {
-        const scale = contentWidth / totalWidth;
-        (Object.keys(colWidths) as Array<keyof ColumnWidths>).forEach(key => {
-          colWidths[key] = Math.floor(colWidths[key] * scale);
-        });
-      }
+      // Define standard font sizes
+      const fontSizes = {
+        heading: 10,    // Header font size
+        body: 8,        // Body text font size (2 points smaller)
+        small: 7        // Small text (for annotations)
+      };
 
-      const headers = [
-        'Nr', 
-        'Name',
-        'Location',
-        'Description', 
-        'Creation\nDate', 
-        'Completed\nDate', 
-        'Status', 
-        'Photo', 
-        'Notes', 
-        'Assigned'
-      ];
+      // Draw box around content with spacing
+      const drawContentBox = (y: number, height: number, isCompleted: boolean = false) => {
+        const boxPadding = 4;
+        if (isCompleted) {
+          // Draw green background for completed items
+          doc.setFillColor(240, 255, 240);
+          doc.rect(margin, y - boxPadding, contentWidth, height + (boxPadding * 2), 'F');
+        }
+        // Draw border box
+        doc.setDrawColor(200, 200, 200);
+        doc.setLineWidth(0.5);
+        doc.rect(margin, y - boxPadding, contentWidth, height + (boxPadding * 2));
+      };
+
+      // Table headers
+      let yPosition = margin + 35;
+      const headers = ['Nr', 'Photo', 'Details', 'Dates', 'Status', 'Assigned'];
       
-      // Create a function to draw headers
       const drawTableHeader = (startY: number) => {
-        // Add table header with gray background
+        // Header background
         doc.setFillColor(245, 245, 245);
         doc.rect(margin, startY - 5, contentWidth, 8, 'F');
         
-        // Draw header texts with consistent formatting
         let xPos = margin;
-        doc.setFontSize(9);
+        doc.setFontSize(fontSizes.heading);
         doc.setTextColor(0, 0, 0);
         doc.setFont(undefined, 'bold');
+        
         headers.forEach((header, index) => {
           const colWidth = Object.values(colWidths)[index];
-          const alignment = ['Nr', 'Status', 'Creation\nDate', 'Completed\nDate'].includes(header) ? 'center' : 'left';
+          const alignment = ['Nr', 'Status', 'Dates', 'Assigned'].includes(header) ? 'center' : 'left';
           const xOffset = alignment === 'center' ? colWidth / 2 : 3;
           doc.text(header, xPos + xOffset, startY - 1, { align: alignment });
           xPos += colWidth;
         });
-        return startY + 10; // Return the next Y position
+
+        return startY + 10;
       };
 
       // Initial header
       yPosition = drawTableHeader(margin + 35);
 
-      // Function to calculate optimal dimensions
-      const calculateOptimalDimensions = async (photoBase64: string, baseRowHeight: number, baseColWidth: number) => {
-        const getImageDimensions = (src: string): Promise<{ width: number; height: number }> => {
-          return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => resolve({ width: img.width, height: img.height });
-            img.onerror = reject;
-            img.src = src;
-          });
-        };
-
-        try {
-          const dimensions = await getImageDimensions(photoBase64);
-          const aspectRatio = dimensions.width / dimensions.height;
-          
-          // Base dimensions with padding
-          const maxBaseHeight = baseRowHeight - 6; // 3mm padding top and bottom
-          const maxBaseWidth = baseColWidth - 6;  // 3mm padding left and right
-          
-          let imgWidth, imgHeight, newRowHeight, newColWidth;
-          
-          if (aspectRatio > 1) {
-            // Landscape image
-            if (dimensions.width / dimensions.height > maxBaseWidth / maxBaseHeight) {
-              // Width constrained
-              imgWidth = maxBaseWidth;
-              imgHeight = imgWidth / aspectRatio;
-              newRowHeight = Math.max(baseRowHeight, imgHeight + 6); // Add padding
-              newColWidth = baseColWidth;
-            } else {
-              // Height constrained
-              imgHeight = maxBaseHeight;
-              imgWidth = imgHeight * aspectRatio;
-              newRowHeight = baseRowHeight;
-              newColWidth = Math.max(baseColWidth, imgWidth + 6); // Add padding
-            }
-          } else {
-            // Portrait image
-            if (dimensions.height / dimensions.width > maxBaseHeight / maxBaseWidth) {
-              // Height constrained
-              imgHeight = maxBaseHeight;
-              imgWidth = imgHeight * aspectRatio;
-              newRowHeight = baseRowHeight;
-              newColWidth = Math.max(baseColWidth, imgWidth + 6);
-            } else {
-              // Width constrained
-              imgWidth = maxBaseWidth;
-              imgHeight = imgWidth / aspectRatio;
-              newRowHeight = Math.max(baseRowHeight, imgHeight + 6);
-              newColWidth = baseColWidth;
-            }
-          }
-
-          return {
-            imgWidth,
-            imgHeight,
-            rowHeight: newRowHeight,
-            colWidth: newColWidth
-          };
-        } catch (error) {
-          console.error('Error calculating dimensions:', error);
-          return {
-            imgWidth: baseColWidth - 6,
-            imgHeight: baseRowHeight - 6,
-            rowHeight: baseRowHeight,
-            colWidth: baseColWidth
-          };
-        }
-      };
-
       // Add rows
-      for (const snag of snags) {
-        const baseRowHeight = 35;
+      for (let i = 0; i < snags.length; i++) {
+        const snag = snags[i];
+        const baseRowHeight = 40;
         let rowHeight = baseRowHeight;
         let photoWidth = colWidths.photo;
         
         try {
-          // Set current snag data for image processing
-          (window as any).currentSnagStatus = snag.status;
-          (window as any).currentSnagCompletionDate = snag.completionDate;
-          (window as any).currentSnagAnnotations = snag.annotations;
-
           const photoBase64 = await compressImage(snag.photoPath);
           
-          // Calculate optimal dimensions for this row
-          const { imgWidth, imgHeight, rowHeight: newRowHeight, colWidth: newColWidth } = 
-            await calculateOptimalDimensions(photoBase64, baseRowHeight, colWidths.photo);
+          // Calculate optimal photo dimensions for portrait layout
+          const img = new Image();
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.src = photoBase64;
+          });
           
-          rowHeight = newRowHeight;
-          photoWidth = newColWidth;
+          const imgAspectRatio = img.width / img.height;
+          const maxPhotoHeight = baseRowHeight - 8;
+          const maxPhotoWidth = colWidths.photo - 6;
+          
+          let imgWidth = maxPhotoWidth;
+          let imgHeight = imgWidth / imgAspectRatio;
+          
+          if (imgHeight > maxPhotoHeight) {
+            imgHeight = maxPhotoHeight;
+            imgWidth = imgHeight * imgAspectRatio;
+          }
 
-          // Check if we need a new page
-          if (yPosition + rowHeight > pageHeight - margin) {
+          // Check if we need a new page - add more padding for boxes
+          if (yPosition + rowHeight + 12 > pageHeight - margin) {
             doc.addPage();
             yPosition = margin + 10;
             yPosition = drawTableHeader(yPosition);
           }
 
-          // Draw row background for completed items
+          // Draw box and background
+          drawContentBox(yPosition, rowHeight, snag.status === 'Completed');
+
           if (snag.status === 'Completed') {
-            doc.setFillColor(240, 255, 240);
-            doc.rect(margin, yPosition - 4, contentWidth, rowHeight, 'F');
+            // Add large "Completed" watermark
+            const watermarkFontSize = 20;
+            doc.setFontSize(watermarkFontSize);
+            doc.setFont(undefined, 'bold');
+            doc.setTextColor(34, 197, 94);
+            
+            const watermarkX = margin + contentWidth - 5;
+            const watermarkY = yPosition + (rowHeight / 2) + 2;
+            
+            doc.text("COMPLETED", watermarkX, watermarkY, { 
+              align: 'right',
+              baseline: 'middle'
+            });
+            
+            doc.setTextColor(0, 0, 0);
           }
 
           // Add row data
           let xPosition = margin;
           doc.setFontSize(9);
           doc.setTextColor(0, 0, 0);
-          doc.setFont(undefined, 'normal');
 
-          // NR - center aligned
+          // Snag number - center aligned with bold and larger font
+          doc.setFont(undefined, 'bold');
+          doc.setFontSize(fontSizes.heading);
           doc.text(snag.snagNumber.toString(), xPosition + (colWidths.nr / 2), yPosition, { align: 'center' });
           xPosition += colWidths.nr;
 
-          // NAME - left aligned with more padding
+          // Name - left aligned with photo
+          doc.setFontSize(fontSizes.heading);
           doc.setFont(undefined, 'bold');
-          const nameLines = doc.splitTextToSize(snag.name || 'Untitled Snag', colWidths.name - 6);
-          doc.text(nameLines, xPosition + 3, yPosition);
-          xPosition += colWidths.name;
+          doc.text(snag.name || 'Untitled Snag', xPosition + 3, yPosition);
 
-          // LOCATION - left aligned with padding
-          doc.setFont(undefined, 'normal');
-          const locationLines = doc.splitTextToSize(snag.location || 'No location', colWidths.location - 6);
-          doc.text(locationLines, xPosition + 3, yPosition);
-          xPosition += colWidths.location;
-
-          // DESCRIPTION - left aligned with more padding
-          doc.setFont(undefined, 'normal');
-          const descriptionLines = doc.splitTextToSize(snag.description || 'No description', colWidths.description - 6);
-          doc.text(descriptionLines, xPosition + 3, yPosition);
-          xPosition += colWidths.description;
-
-          // CREATED DATE - center aligned
-          const createdDate = format(new Date(snag.createdAt), 'MM/dd/yy');
-          doc.text(createdDate, xPosition + (colWidths.date / 2), yPosition, { align: 'center' });
-          xPosition += colWidths.date;
-
-          // COMPLETION DATE - center aligned
-          if (snag.completionDate) {
-            const completionDate = format(new Date(snag.completionDate), 'MM/dd/yy');
-            doc.text(completionDate, xPosition + (colWidths.completion / 2), yPosition, { align: 'center' });
-          }
-          xPosition += colWidths.completion;
-
-          // STATUS - center aligned with color
-          const statusColor = snag.status === 'Completed' ? [34, 197, 94] : [255, 140, 0]; // Dark orange for In Progress
-          doc.setTextColor(statusColor[0], statusColor[1], statusColor[2]);
-          doc.setFont(undefined, 'bold'); // Make status bold
-          doc.text(snag.status, xPosition + (colWidths.status / 2), yPosition, { align: 'center' });
-          xPosition += colWidths.status;
-
-          // PHOTO - with dynamic sizing
+          // Photo with annotations
           if (photoBase64) {
-            // Center the image in the column
-            const xOffset = (photoWidth - imgWidth) / 2;
-            const yOffset = (rowHeight - imgHeight) / 2;
+            // Calculate maximum possible dimensions while maintaining aspect ratio
+            const maxPhotoWidth = colWidths.photo - 6;  // 3mm padding on each side
+            const maxPhotoHeight = rowHeight - 4;       // 2mm padding top and bottom
+            
+            let imgWidth = maxPhotoWidth;
+            let imgHeight = imgWidth / imgAspectRatio;
+            
+            if (imgHeight > maxPhotoHeight) {
+              imgHeight = maxPhotoHeight;
+              imgWidth = imgHeight * imgAspectRatio;
+            }
+
+            // Left align with header (3mm from column start)
+            const xOffset = xPosition + 3;
+            const yOffset = yPosition + 2;
+            
             doc.addImage(
-              photoBase64, 
-              'JPEG', 
-              xPosition + xOffset, 
-              yPosition - 2 + yOffset, 
-              imgWidth, 
+              photoBase64,
+              'JPEG',
+              xOffset,
+              yOffset,
+              imgWidth,
               imgHeight
             );
 
-            // Add watermark for completed snags
             if (snag.status === 'Completed') {
               addCompletedWatermark(
                 doc,
-                xPosition + xOffset,
-                yPosition - 2 + yOffset,
+                xOffset,
+                yOffset,
                 imgWidth,
                 imgHeight,
                 snag.completionDate
               );
             }
 
-            // Add annotation pins
             if (snag.annotations?.length) {
               drawAnnotationPins(
                 doc,
-                xPosition + xOffset,
-                yPosition - 2 + yOffset,
+                xOffset,
+                yOffset,
                 imgWidth,
                 imgHeight,
                 snag.annotations
               );
             }
           }
-          xPosition += photoWidth;
+          xPosition += colWidths.photo;
 
-          // ANNOTATIONS - left aligned with clear formatting
+          // Details section with standardized font sizes (without name since it's moved)
+          doc.setFontSize(fontSizes.body);
+          doc.setFont(undefined, 'normal');
+          doc.text(`Location: ${snag.location || 'No location'}`, xPosition + 3, yPosition + 6);
+          
+          const description = doc.splitTextToSize(snag.description || 'No description', colWidths.details - 6);
+          doc.text(description, xPosition + 3, yPosition + 11);
+          
+          // Annotations with smaller font
           if (snag.annotations?.length) {
-            doc.setFontSize(7); // Keep annotations smaller
-            doc.setTextColor(255, 140, 0); // Orange color for annotations
-            doc.setFont(undefined, 'normal'); // Remove bold from annotations
-            const annotationText = snag.annotations
-              .map((a, i) => `${i + 1}. ${a.text}`)
-              .join('\n');
-            const annotationLines = doc.splitTextToSize(annotationText, colWidths.notes - 4);
-            doc.text(annotationLines, xPosition + 2, yPosition);
+            let annotationY = yPosition + 16 + (description.length * 4);
+            doc.setFontSize(fontSizes.small);
+            doc.setTextColor(100, 100, 100);
+            snag.annotations.forEach((ann, idx) => {
+              const annotText = doc.splitTextToSize(`${idx + 1}. ${ann.text}`, colWidths.details - 10);
+              doc.text(annotText, xPosition + 5, annotationY);
+              annotationY += annotText.length * 3;
+            });
           }
-          xPosition += colWidths.notes;
+          xPosition += colWidths.details;
 
-          // ASSIGNED - center aligned with better text wrapping
-          doc.setFontSize(9);
+          // Dates - center aligned
+          doc.setFontSize(fontSizes.body);
+          doc.setTextColor(0, 0, 0);
+          const createdDate = format(new Date(snag.createdAt), 'MM/dd/yy');
+          doc.text(createdDate, xPosition + (colWidths.dates / 2), yPosition, { align: 'center' });
+          
+          if (snag.completionDate) {
+            const completionDate = format(new Date(snag.completionDate), 'MM/dd/yy');
+            doc.text(completionDate, xPosition + (colWidths.dates / 2), yPosition + 5, { align: 'center' });
+          }
+          xPosition += colWidths.dates;
+
+          // Status - center aligned with color
+          doc.setFontSize(fontSizes.body);
+          const statusColor = snag.status === 'Completed' ? [34, 197, 94] : [255, 140, 0];
+          doc.setTextColor(statusColor[0], statusColor[1], statusColor[2]);
+          doc.setFont(undefined, 'bold');
+          doc.text(snag.status, xPosition + (colWidths.status / 2), yPosition, { align: 'center' });
+          
+          // Add completion date under status if completed
+          if (snag.status === 'Completed' && snag.completionDate) {
+            doc.setFontSize(fontSizes.small);
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(34, 197, 94);
+            const statusCompletionDate = format(new Date(snag.completionDate), 'MM/dd/yy');
+            doc.text(statusCompletionDate, xPosition + (colWidths.status / 2), yPosition + 4, { align: 'center' });
+          }
+          xPosition += colWidths.status;
+
+          // Assigned To - center aligned with smaller font if needed
+          doc.setFontSize(fontSizes.body);
           doc.setFont(undefined, 'normal');
           doc.setTextColor(0, 0, 0);
           const assignedText = snag.assignedTo || 'Unassigned';
-          const assignedWidth = colWidths.assigned - 6; // More padding for wrapped text
-          const assignedLines = doc.splitTextToSize(assignedText, assignedWidth);
-          
-          // Calculate vertical position for multi-line text
-          const lineHeight = 4; // Approximate line height in mm
-          const totalTextHeight = assignedLines.length * lineHeight;
-          const textYPosition = yPosition - (totalTextHeight / 2) + (lineHeight / 2);
-          
-          doc.text(assignedLines, xPosition + (colWidths.assigned / 2), textYPosition, { 
+          doc.text(assignedText, xPosition + (colWidths.assigned / 2), yPosition, { 
             align: 'center',
-            maxWidth: assignedWidth
+            maxWidth: colWidths.assigned - 6
           });
 
-          // Add light separator line between rows with more spacing
-          doc.setDrawColor(230, 230, 230);
-          doc.line(margin, yPosition + rowHeight - 1, margin + contentWidth, yPosition + rowHeight - 1);
-
-          yPosition += rowHeight;
-
-          // Clear global state only after image processing is complete
-          (window as any).currentSnagStatus = null;
-          (window as any).currentSnagCompletionDate = null;
-          (window as any).currentSnagAnnotations = null;
+          // Adjust spacing between boxes
+          yPosition += rowHeight + 8; // Increased spacing between boxes
         } catch (error) {
           console.error('Error processing snag:', error);
         }
       }
-      
+
       // Save the PDF
-      const formattedDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      const formattedDate = now.toISOString().split('T')[0];
       const formattedTime = now.toTimeString()
-        .split(' ')[0] // HH:mm:ss
-        .replace(/:/g, '-'); // Replace colons with hyphens for filename safety
+        .split(' ')[0]
+        .replace(/:/g, '-');
       const safeProjectName = projectName.replace(/[^a-zA-Z0-9]/g, '_');
       const filename = `List_Report_${safeProjectName}_${formattedDate}_${formattedTime}.pdf`;
       
