@@ -19,21 +19,23 @@ import React from 'react';
 
 interface SnagListItemProps {
   snag: Snag;
+  isSelected: boolean;
+  onToggleSelect: (snag: Snag) => void;
   onEdit: (snag: Snag) => void;
   onDelete: (id: string) => void;
   onViewAnnotations: (snag: Snag) => void;
-  isSelected?: boolean;
-  onToggleSelect?: (snag: Snag) => void;
+  isDarkMode?: boolean;
 }
 
-export const SnagListItem: FC<SnagListItemProps> = ({
-  snag,
-  onEdit,
-  onDelete,
+export function SnagListItem({ 
+  snag, 
+  isSelected, 
+  onToggleSelect, 
+  onEdit, 
+  onDelete, 
   onViewAnnotations,
-  isSelected = false,
-  onToggleSelect
-}) => {
+  isDarkMode = false 
+}: SnagListItemProps) {
   console.log('Snag data:', snag);
 
   const formattedDate = React.useMemo(() => {
@@ -139,7 +141,11 @@ export const SnagListItem: FC<SnagListItemProps> = ({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onEdit(snag)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  console.log('Edit button clicked for snag:', snag.id);
+                  onEdit(snag);
+                }}
                 className="h-8 w-8"
                 title="Edit entry"
               >
@@ -182,19 +188,14 @@ export const SnagListItem: FC<SnagListItemProps> = ({
           {/* Annotations Section */}
           {snag.annotations && snag.annotations.length > 0 && (
             <div className="mt-3">
-              <div className="text-sm font-medium text-gray-500 mb-2">Latest Annotations</div>
-              <div className="space-y-2 max-h-[80px] overflow-y-auto pr-2">
-                {snag.annotations.slice(0, 2).map((annotation, index) => (
+              <div className="text-sm font-medium text-gray-500 mb-2">Annotations</div>
+              <div className="space-y-2 max-h-[120px] overflow-y-auto pr-2">
+                {snag.annotations.map((annotation, index) => (
                   <div key={annotation.id} className="flex items-start gap-2 text-sm bg-gray-50 p-2 rounded-md">
                     <span className="text-gray-400 font-medium">{index + 1}.</span>
-                    <span className="line-clamp-1">{annotation.text}</span>
+                    <span className="line-clamp-2">{annotation.text}</span>
                   </div>
                 ))}
-                {snag.annotations.length > 2 && (
-                  <div className="text-sm text-gray-500 text-right">
-                    +{snag.annotations.length - 2} more annotations
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -202,7 +203,7 @@ export const SnagListItem: FC<SnagListItemProps> = ({
       </div>
     </Card>
   );
-};
+}
 
 const getPriorityColor = (priority: string) => {
   switch (priority.toLowerCase()) {

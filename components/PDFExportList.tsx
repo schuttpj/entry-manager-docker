@@ -8,6 +8,8 @@ import { format } from "date-fns";
 interface PDFExportListProps {
   snags: Snag[];
   projectName: string;
+  isDarkMode?: boolean;
+  onClose: () => void;
 }
 
 const compressImage = async (imageUrl: string, maxWidth = 800): Promise<string> => {
@@ -129,7 +131,7 @@ const drawAnnotationPins = (
   });
 };
 
-export default function PDFExportList({ snags, projectName }: PDFExportListProps) {
+export default function PDFExportList({ snags, projectName, isDarkMode = false, onClose }: PDFExportListProps) {
   const handleExport = async () => {
     if (!snags?.length) {
       alert('Please select at least one snag to export.');

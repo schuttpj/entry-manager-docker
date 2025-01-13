@@ -41,6 +41,7 @@ interface AnnotationPinProps {
   isActive: boolean;
   onClick: (e: React.MouseEvent) => void;
   isDarkMode?: boolean;
+  isTemporary?: boolean;
 }
 
 interface EditState {
@@ -52,7 +53,7 @@ interface EditState {
   location: string;
 }
 
-function AnnotationPin({ number, x, y, text, isActive, onClick, isDarkMode }: AnnotationPinProps) {
+function AnnotationPin({ number, x, y, text, isActive, onClick, isDarkMode, isTemporary }: AnnotationPinProps) {
   return (
     <div
       className={cn(
@@ -225,84 +226,141 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
   // Dragging state
   const dragRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragPosition, setDragPosition] = useState({ x: window.innerWidth / 2 - 212, y: 100 });
+  const [dragPosition, setDragPosition] = useState({ 
+    right: 40, // 40px from the right edge
+    y: 80 // Just below the header
+  });
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  // Add temporary annotations state
+  const [tempAnnotations, setTempAnnotations] = useState<Annotation[]>([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Add this near the top of the component, with other state
+  const [showExitDialog, setShowExitDialog] = useState(false);
 
   // Update ref when window opens/closes
   useEffect(() => {
     isWindowOpenRef.current = isOpen;
   }, [isOpen]);
 
+  // Add debug logging utility
+  const debugLog = (area: string, event: string, data?: any) => {
+    console.log(`[GridView Debug] ${area} - ${event}`, {
+      timestamp: new Date().toISOString(),
+      windowOpen: isWindowOpenRef.current,
+      isProcessing: isProcessingAction,
+      selectedImageExists: !!selectedImage,
+      selectedSnagExists: !!selectedSnag,
+      isEditing: isEditingAnnotations,
+      activeAnnotation: activeAnnotationIndex,
+      editingAnnotation: !!editingAnnotation,
+      ...data
+    });
+  };
+
+  // Add effect to track state changes
+  useEffect(() => {
+    debugLog('StateChange', 'Window State Updated', { isOpen });
+  }, [isOpen]);
+
+  useEffect(() => {
+    debugLog('StateChange', 'Selected Image/Snag Updated', {
+      hasImage: !!selectedImage,
+      hasSnag: !!selectedSnag
+    });
+  }, [selectedImage, selectedSnag]);
+
+  useEffect(() => {
+    debugLog('StateChange', 'Editing State Updated', {
+      isEditingAnnotations,
+      editingAnnotation
+    });
+  }, [isEditingAnnotations, editingAnnotation]);
+
+  // Update mouse handlers with detailed logging
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (!dragRef.current?.contains(e.target as Node)) return;
+    debugLog('MouseEvent', 'MouseDown Started', {
+      target: e.target,
+      currentTarget: e.currentTarget,
+      isDragRef: !!dragRef.current?.contains(e.target as Node)
+    });
+
+    if (!dragRef.current?.contains(e.target as Node)) {
+      debugLog('MouseEvent', 'MouseDown Rejected - Not in drag ref');
+      return;
+    }
     
     setIsDragging(true);
     setDragStart({
-      x: e.clientX - dragPosition.x,
+      x: window.innerWidth - e.clientX - dragPosition.right,
       y: e.clientY - dragPosition.y
     });
+
+    e.preventDefault();
+    debugLog('MouseEvent', 'MouseDown Completed', { isDragging: true });
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
 
-    setDragPosition({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y
+    debugLog('MouseEvent', 'MouseMove', {
+      clientX: e.clientX,
+      clientY: e.clientY,
+      dragStart,
+      dragPosition
     });
-  };
 
-  const handleMouseUp = () => {
+    const newRight = Math.max(20, window.innerWidth - e.clientX - dragStart.x);
+    const newY = Math.max(0, Math.min(e.clientY - dragStart.y, window.innerHeight - 100));
+
+    setDragPosition({ right: newRight, y: newY });
+  }, [isDragging, dragStart, dragPosition]);
+
+  const handleMouseUp = useCallback(() => {
+    debugLog('MouseEvent', 'MouseUp', { wasDragging: isDragging });
     setIsDragging(false);
-  };
+  }, [isDragging]);
 
   useEffect(() => {
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
+      
+      // Add cursor styles to body
+      document.body.style.cursor = 'grabbing';
+      document.body.style.userSelect = 'none';
     }
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      
+      // Reset cursor styles
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
     };
-  }, [isDragging, dragStart]);
+  }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  const handleImageClick = async (e: React.MouseEvent) => {
-    console.log('handleImageClick - Start', {
-      isEditingAnnotations,
-      selectedSnag,
-      windowOpen: isWindowOpenRef.current
-    });
-
-    if (!isEditingAnnotations || !selectedSnag) {
-      console.log('handleImageClick - Early return due to:', {
-        isEditingAnnotations,
-        hasSelectedSnag: !!selectedSnag
-      });
-      return;
-    }
-    
-    // Set window state and processing flag
-    isWindowOpenRef.current = true;
-    setIsProcessingAction(true);
-    console.log('Window state set to open, processing started');
+  // Simplify image click handler to only update temporary state
+  const handleImageClick = (e: React.MouseEvent) => {
+    debugLog('ImageClick', 'Started');
 
     e.preventDefault();
     e.stopPropagation();
-    
+
+    if (!isEditingAnnotations || !selectedSnag) {
+      return;
+    }
+
     const target = e.target as HTMLElement;
     if (!(target instanceof HTMLImageElement)) {
-      console.log('handleImageClick - Not an image element, returning');
-      setIsProcessingAction(false);
       return;
     }
 
     const rect = target.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-
-    console.log('handleImageClick - Calculated position:', { x, y });
 
     const newAnnotation: Annotation = {
       id: crypto.randomUUID(),
@@ -312,76 +370,162 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
       size: pinSize
     };
 
-    try {
-      console.log('handleImageClick - Creating new annotation:', newAnnotation);
-      
-      // Create a complete copy of the current snag to work with
-      const workingSnag = { ...selectedSnag };
-      const updatedAnnotations = [...(workingSnag.annotations || []), newAnnotation];
-      console.log('handleImageClick - Updated annotations array:', updatedAnnotations);
+    setTempAnnotations(prev => [...prev, newAnnotation]);
+    setEditingAnnotation({ id: newAnnotation.id, text: '' });
+    setActiveAnnotationIndex(tempAnnotations.length);
+    setHasUnsavedChanges(true);
+  };
 
-      // Update local state first
-      setSelectedSnag(prev => {
-        if (!prev) return workingSnag;
-        return {
-          ...prev,
-          annotations: updatedAnnotations
-        };
+  // Update save handler to handle all annotation changes
+  const handleSaveAnnotations = async () => {
+    if (!selectedSnag) return;
+
+    debugLog('SaveAnnotations', 'Started', { selectedSnag, tempAnnotations });
+    setIsProcessingAction(true);
+    
+    try {
+      // Combine existing and temporary annotations
+      const existingAnnotations = selectedSnag.annotations.map(ann => {
+        const editedTemp = editingAnnotation?.id === ann.id ? { ...ann, text: editingAnnotation.text } : ann;
+        return editedTemp;
       });
 
-      // Set editing state before database operation
-      console.log('handleImageClick - Setting editing state');
-      setEditingAnnotation({ id: newAnnotation.id, text: '' });
-      setActiveAnnotationIndex(updatedAnnotations.length - 1);
-      setIsEditingAnnotations(true);
+      const allAnnotations = [...existingAnnotations, ...tempAnnotations];
       
-      // Save to database in the background
-      console.log('handleImageClick - Saving to database');
-      const dbUpdatedSnag = await updateSnagAnnotations(selectedSnag.id, updatedAnnotations);
-      console.log('handleImageClick - Database response:', dbUpdatedSnag);
-
-      // Only proceed with further updates if the window is still open
-      if (!isWindowOpenRef.current) {
-        console.log('handleImageClick - Window closed during operation, returning');
-        return;
-      }
-
-      // Create the final state update
+      debugLog('SaveAnnotations', 'Saving to DB', { allAnnotations });
+      
+      // Save to database
+      const dbUpdatedSnag = await updateSnagAnnotations(selectedSnag.id, allAnnotations);
+      
       const finalSnag = {
-        ...workingSnag,
+        ...selectedSnag,
         ...dbUpdatedSnag,
-        annotations: updatedAnnotations,
-        // Preserve critical fields
-        photoPath: workingSnag.photoPath,
-        projectName: workingSnag.projectName,
-        description: workingSnag.description,
-        completionDate: workingSnag.completionDate
+        annotations: allAnnotations,
+        updatedAt: new Date().toISOString()
       };
 
-      console.log('handleImageClick - Setting final state:', finalSnag);
-      setSelectedSnag(finalSnag);
+      debugLog('SaveAnnotations', 'DB Update Complete', { finalSnag });
 
-      // Ensure editing state is maintained
-      setIsEditingAnnotations(true);
-      setSelectedImage(finalSnag.photoPath);
+      // Update local state
+      setSelectedSnag(finalSnag);
+      setTempAnnotations([]);
+      setHasUnsavedChanges(false);
+      setEditingAnnotation(null);
+      setActiveAnnotationIndex(null);
       
-      // Only notify parent if window is still open
-      if (isWindowOpenRef.current && onSnagUpdate) {
-        console.log('handleImageClick - Updating parent component');
+      // Ensure parent component is updated for list view sync
+      if (onSnagUpdate) {
         onSnagUpdate(finalSnag);
       }
+
+      toast.success('All changes saved successfully');
     } catch (error) {
-      console.error('handleImageClick - Error:', error);
-      toast.error('Failed to add annotation', {
-        duration: 3000
-      });
+      console.error('Failed to save annotations:', error);
+      toast.error('Failed to save changes to database');
+      debugLog('SaveAnnotations', 'Error', { error });
     } finally {
-      // Clear processing flag after a small delay
-      setTimeout(() => {
-        setIsProcessingAction(false);
-        console.log('Processing action completed');
-      }, 100);
+      setIsProcessingAction(false);
     }
+  };
+
+  // Update the exit dialog save handler
+  const handleSaveAndExit = async () => {
+    debugLog('SaveAndExit', 'Started');
+    try {
+      await handleSaveAnnotations();
+      closeWindow();
+    } catch (error) {
+      console.error('Failed to save before exit:', error);
+      toast.error('Failed to save changes before closing');
+    }
+  };
+
+  // Update annotation text change handler
+  const handleAnnotationTextChange = (id: string, text: string) => {
+    debugLog('AnnotationChange', 'Text Changed', { id, text });
+    
+    // Check if it's a temporary annotation
+    const isTempAnnotation = tempAnnotations.some(ann => ann.id === id);
+    
+    if (isTempAnnotation) {
+      setTempAnnotations(prev => 
+        prev.map(ann => 
+          ann.id === id ? { ...ann, text } : ann
+        )
+      );
+    } else if (selectedSnag) {
+      // Update the text in selectedSnag annotations
+      setSelectedSnag(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          annotations: prev.annotations.map(ann =>
+            ann.id === id ? { ...ann, text } : ann
+          )
+        };
+      });
+    }
+    
+    setEditingAnnotation({ id, text });
+    setHasUnsavedChanges(true);
+  };
+
+  // Add effect to track changes that require saving
+  useEffect(() => {
+    const hasTemporaryAnnotations = tempAnnotations.length > 0;
+    const hasEditedAnnotations = editingAnnotation !== null;
+    
+    debugLog('SaveState', 'Change Detection', {
+      tempAnnotations: tempAnnotations.length,
+      hasEditedAnnotations,
+      currentSaveState: hasUnsavedChanges
+    });
+
+    if (hasTemporaryAnnotations || hasEditedAnnotations) {
+      setHasUnsavedChanges(true);
+    }
+  }, [tempAnnotations, editingAnnotation]);
+
+  // Update close handler to check for unsaved changes
+  const handleCloseClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (hasUnsavedChanges) {
+      setShowExitDialog(true);
+    } else {
+      closeWindow();
+    }
+  };
+
+  // Add a new function to handle the actual closing
+  const closeWindow = () => {
+    // Reset all states
+    isWindowOpenRef.current = false;
+    setEditingAnnotation(null);
+    setActiveAnnotationIndex(null);
+    setIsEditingAnnotations(false);
+    setSelectedImage(null);
+    setSelectedSnag(null);
+    setTempAnnotations([]);
+    setHasUnsavedChanges(false);
+    setShowExitDialog(false);
+    
+    if (onClose) {
+      onClose();
+    }
+  };
+
+  // Add new function to close just the annotation view
+  const closeAnnotationView = () => {
+    setEditingAnnotation(null);
+    setActiveAnnotationIndex(null);
+    setIsEditingAnnotations(false);
+    setSelectedImage(null);
+    setSelectedSnag(null);
+    setTempAnnotations([]);
+    setHasUnsavedChanges(false);
+    setShowExitDialog(false);
   };
 
   const handleAnnotationSave = async () => {
@@ -420,85 +564,48 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
   };
 
   const handleAnnotationDelete = async (annotationId: string) => {
-    console.log('handleAnnotationDelete - Start', {
-      annotationId,
-      selectedSnag,
-      windowOpen: isWindowOpenRef.current
-    });
+    if (!selectedSnag) return;
 
-    if (!selectedSnag) {
-      console.log('handleAnnotationDelete - No selected snag, returning');
+    // For temporary annotations, just update local state
+    const isTempAnnotation = tempAnnotations.some(ann => ann.id === annotationId);
+    if (isTempAnnotation) {
+      setTempAnnotations(prev => prev.filter(ann => ann.id !== annotationId));
+      if (tempAnnotations.length === 1) {
+        setHasUnsavedChanges(false);
+      }
+      setActiveAnnotationIndex(null);
       return;
     }
 
-    // Set window state
-    isWindowOpenRef.current = true;
-    console.log('Window state set to open');
-
-    // Set processing flag immediately
-    setIsProcessingAction(true);
-    console.log('Processing action started');
-
-    try {
-      console.log('handleAnnotationDelete - Maintaining window state');
-      setSelectedImage(selectedSnag.photoPath);
-      setIsEditingAnnotations(true);
-
-      const updatedAnnotations = selectedSnag.annotations.filter(ann => ann.id !== annotationId);
-      console.log('handleAnnotationDelete - Filtered annotations:', updatedAnnotations);
-      
-      const updatedSnag = {
-        ...selectedSnag,
-        annotations: updatedAnnotations,
-        photoPath: selectedSnag.photoPath,
-        projectName: selectedSnag.projectName,
-        description: selectedSnag.description,
+    // For saved annotations, mark as unsaved and update temporary state
+    const updatedAnnotations = selectedSnag.annotations.filter(ann => ann.id !== annotationId);
+    
+    // Update the selected snag with the filtered annotations
+    setSelectedSnag(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        annotations: updatedAnnotations
       };
+    });
+    
+    // Mark as unsaved since we need to save the deletion
+    setHasUnsavedChanges(true);
+    setActiveAnnotationIndex(null);
+  };
 
-      console.log('handleAnnotationDelete - Setting local state:', updatedSnag);
-      setSelectedSnag(updatedSnag);
-      
-      console.log('handleAnnotationDelete - Saving to database');
-      const dbUpdatedSnag = await updateSnagAnnotations(selectedSnag.id, updatedAnnotations);
-      console.log('handleAnnotationDelete - Database response:', dbUpdatedSnag);
-      
-      if (!isWindowOpenRef.current) {
-        console.log('handleAnnotationDelete - Window closed during operation, returning');
-        return;
-      }
-
-      const finalSnag = {
-        ...selectedSnag,
-        ...dbUpdatedSnag,
-        annotations: updatedAnnotations,
-        photoPath: selectedSnag.photoPath,
-        projectName: selectedSnag.projectName,
-        description: selectedSnag.description,
-        completionDate: selectedSnag.completionDate
-      };
-
-      console.log('handleAnnotationDelete - Setting final state:', finalSnag);
-      setSelectedSnag(finalSnag);
-      
-      console.log('handleAnnotationDelete - Maintaining window state');
-      setIsEditingAnnotations(true);
-      setSelectedImage(finalSnag.photoPath);
-      
-      if (isWindowOpenRef.current && onSnagUpdate) {
-        console.log('handleAnnotationDelete - Updating parent component');
-        onSnagUpdate(finalSnag);
-      }
-    } catch (error) {
-      console.error('handleAnnotationDelete - Error:', error);
-      toast.error('Failed to delete annotation', {
-        duration: 3000
-      });
-    } finally {
-      console.log('handleAnnotationDelete - Cleanup');
-      setTimeout(() => {
-        setIsProcessingAction(false);
-        console.log('Processing action completed');
-      }, 100);
+  // Update the delete button click handler
+  const handleDeleteClick = (e: React.MouseEvent, index: number, annotation: Annotation) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const isTempAnnotation = index >= (selectedSnag?.annotations?.length || 0);
+    const message = isTempAnnotation 
+      ? 'Are you sure you want to delete this unsaved annotation?' 
+      : 'Are you sure you want to delete this annotation?';
+    
+    if (window.confirm(message)) {
+      handleAnnotationDelete(annotation.id);
     }
   };
 
@@ -549,109 +656,6 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
     return isProcessingAction;
   }, [isProcessingAction]);
 
-  const handleCloseClick = (e: React.MouseEvent) => {
-    console.log('handleCloseClick - Start', {
-      isEditingAnnotations,
-      editingAnnotation,
-      windowOpen: isWindowOpenRef.current
-    });
-
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (isEditingAnnotations || editingAnnotation) {
-      console.log('handleCloseClick - Showing confirmation dialog');
-      const shouldClose = window.confirm('Are you sure you want to close? Any unsaved changes will be lost.');
-      if (!shouldClose) {
-        console.log('handleCloseClick - User cancelled close');
-        return;
-      }
-    }
-    
-    console.log('handleCloseClick - Updating window state');
-    isWindowOpenRef.current = false;
-    
-    console.log('handleCloseClick - Clearing states');
-    setEditingAnnotation(null);
-    setActiveAnnotationIndex(null);
-    setIsEditingAnnotations(false);
-    setSelectedImage(null);
-    setSelectedSnag(null);
-    
-    if (onClose) {
-      console.log('handleCloseClick - Calling parent onClose');
-      onClose();
-    }
-  };
-
-  // Prevent unwanted state updates during processing
-  useEffect(() => {
-    if (!isProcessingAction && selectedSnag) {
-      const currentSnag = snags.find(s => s.id === selectedSnag.id);
-      if (currentSnag && (
-        currentSnag.description !== selectedSnag.description ||
-        currentSnag.priority !== selectedSnag.priority ||
-        currentSnag.status !== selectedSnag.status ||
-        currentSnag.assignedTo !== selectedSnag.assignedTo ||
-        currentSnag.name !== selectedSnag.name ||
-        currentSnag.location !== selectedSnag.location
-      )) {
-        // Only update if actual data has changed, preserve editing state
-        setSelectedSnag((prev: Snag | null): Snag | null => {
-          if (!prev) return null;
-          
-          // Ensure we have all required fields from the current snag
-          const updatedSnag: Snag = {
-            id: prev.id,
-            projectName: prev.projectName,
-            description: currentSnag.description,
-            priority: currentSnag.priority,
-            status: currentSnag.status,
-            assignedTo: currentSnag.assignedTo,
-            name: currentSnag.name,
-            location: currentSnag.location,
-            photoPath: prev.photoPath || currentSnag.photoPath,
-            annotations: prev.annotations || currentSnag.annotations || [],
-            createdAt: prev.createdAt,
-            updatedAt: prev.updatedAt,
-            completionDate: prev.completionDate,
-            snagNumber: prev.snagNumber
-          };
-          
-          return updatedSnag;
-        });
-      }
-    }
-  }, [snags, selectedSnag, isProcessingAction]);
-
-  // Add cleanup effect to prevent window closing during operations
-  useEffect(() => {
-    let isActive = true;
-    
-    const cleanup = () => {
-      isActive = false;
-    };
-
-    if (selectedSnag && isEditingAnnotations) {
-      // Prevent state updates during editing
-      const handleBeforeStateUpdate = () => {
-        if (isEditingAnnotations) {
-          return false;
-        }
-      };
-
-      window.addEventListener('beforeunload', cleanup);
-      return () => {
-        window.removeEventListener('beforeunload', cleanup);
-        // Only clear states if component is still mounted and not processing
-        if (isActive && !isProcessingAction && !isEditingAnnotations) {
-          setEditingAnnotation(null);
-          setActiveAnnotationIndex(null);
-        }
-      };
-    }
-  }, [selectedSnag, isEditingAnnotations, isProcessingAction]);
-
   // Add effect to maintain editing state
   useEffect(() => {
     if (selectedSnag && isEditingAnnotations) {
@@ -667,6 +671,31 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
       };
     }
   }, [selectedSnag, isEditingAnnotations]);
+
+  // Add function to handle pin click
+  const handlePinClick = (index: number, annotation: Annotation) => {
+    debugLog('PinClick', 'Pin Clicked', { index, annotation });
+    
+    if (isEditingAnnotations) {
+      setEditingAnnotation({ id: annotation.id, text: annotation.text });
+      setActiveAnnotationIndex(index);
+    } else {
+      setActiveAnnotationIndex(activeAnnotationIndex === index ? null : index);
+    }
+  };
+
+  // Add an effect to update position when window is resized
+  useEffect(() => {
+    const handleResize = () => {
+      setDragPosition(prev => ({
+        ...prev,
+        right: 40 // Keep it 40px from the right edge
+      }));
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -776,7 +805,7 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
                   : "bg-white/10 text-white hover:bg-white/20"
               )}
             >
-              {isEditingAnnotations ? "✓ Adding Pins" : "+ Add Pins"}
+              {isEditingAnnotations ? "✓ Adding & Editing Pins" : "+ Add & Edit Pins"}
             </button>
             {isEditingAnnotations && (
               <div className="flex items-center gap-2 bg-white/10 rounded-full px-3 py-2">
@@ -796,7 +825,15 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
               </div>
             )}
             <button
-              onClick={handleCloseClick}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (hasUnsavedChanges) {
+                  setShowExitDialog(true);
+                } else {
+                  closeAnnotationView();
+                }
+              }}
               className="p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
               title="Close"
             >
@@ -827,7 +864,7 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
               />
               
               {/* Annotation Pins */}
-              {selectedSnag.annotations?.map((annotation, index) => (
+              {[...(selectedSnag.annotations || []), ...tempAnnotations].map((annotation, index) => (
                 <AnnotationPin
                   key={annotation.id}
                   number={index}
@@ -838,56 +875,56 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (isEditingAnnotations) {
-                      setEditingAnnotation({ id: annotation.id, text: annotation.text });
-                    } else {
-                      setActiveAnnotationIndex(activeAnnotationIndex === index ? null : index);
-                    }
+                    handlePinClick(index, annotation);
                   }}
                   isDarkMode={isDarkMode}
+                  isTemporary={index >= (selectedSnag.annotations?.length || 0)}
                 />
               ))}
             </div>
 
             {/* Annotation List */}
-            {selectedSnag?.annotations && selectedSnag.annotations.length > 0 && (
+            {selectedImage && (
               <div 
                 className={cn(
                   "absolute w-80 rounded-lg shadow-xl border p-4 space-y-3",
-                  isDarkMode ? "bg-gray-800/90 border-gray-700" : "bg-white/90 border-gray-200",
-                  isDragging && "cursor-grabbing"
+                  isDarkMode ? "bg-gray-800/90 border-gray-700" : "bg-white/90 border-gray-200"
                 )}
                 style={{
-                  top: dragPosition.y,
-                  left: dragPosition.x,
+                  top: `${dragPosition.y}px`,
+                  right: `${dragPosition.right}px`,
+                  zIndex: 150
                 }}
                 onClick={e => e.stopPropagation()}
               >
                 <div 
                   ref={dragRef}
-                  className="flex items-center justify-between mb-2"
+                  className="flex items-center justify-between mb-2 cursor-grab active:cursor-grabbing"
+                  onMouseDown={handleMouseDown}
                 >
                   <div className="flex items-center gap-2">
-                    <GripHorizontal className={`h-5 w-5 ${isDarkMode ? "text-gray-400" : "text-gray-500"} cursor-grab active:cursor-grabbing`} />
+                    <GripHorizontal className={`h-5 w-5 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`} />
                     <h3 className={`font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
-                      Annotations
+                      {isEditingAnnotations ? "Add & Edit Annotations" : "Annotations"} {tempAnnotations.length > 0 && `(${tempAnnotations.length} unsaved)`}
                     </h3>
                   </div>
                 </div>
                 <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-                  {selectedSnag.annotations.map((annotation, index) => (
+                  {[...(selectedSnag?.annotations || []), ...tempAnnotations].map((annotation, index) => (
                     <div
                       key={annotation.id}
                       className={cn(
-                        "p-3 rounded-lg transition-colors",
+                        "p-3 rounded-lg transition-colors cursor-pointer",
                         activeAnnotationIndex === index
                           ? isDarkMode
                             ? "bg-blue-500/20 border border-blue-500"
                             : "bg-blue-50 border border-blue-200"
                           : isDarkMode
                           ? "hover:bg-gray-700/50"
-                          : "hover:bg-gray-50"
+                          : "hover:bg-gray-50",
+                        index >= (selectedSnag.annotations?.length || 0) && "border border-green-500/50"
                       )}
+                      onClick={() => handlePinClick(index, annotation)}
                     >
                       <div className="flex items-start gap-3">
                         <div className={cn(
@@ -896,16 +933,17 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
                             ? "bg-blue-500 text-white"
                             : isDarkMode
                             ? "bg-gray-700 text-white"
-                            : "bg-white text-gray-900 border border-gray-200"
+                            : "bg-white text-gray-900 border border-gray-200",
+                          index >= (selectedSnag.annotations?.length || 0) && "border-green-500"
                         )}>
                           {index + 1}
                         </div>
                         {editingAnnotation?.id === annotation.id ? (
-                          <div className="flex-1 space-y-2">
+                          <div className="flex-1 space-y-2" onClick={e => e.stopPropagation()}>
                             <input
                               type="text"
                               value={editingAnnotation.text}
-                              onChange={(e) => setEditingAnnotation({ ...editingAnnotation, text: e.target.value })}
+                              onChange={(e) => handleAnnotationTextChange(annotation.id, e.target.value)}
                               className={cn(
                                 "w-full px-2 py-1 rounded border text-sm",
                                 isDarkMode
@@ -917,7 +955,10 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
                             />
                             <div className="flex justify-end gap-2">
                               <button
-                                onClick={() => setEditingAnnotation(null)}
+                                onClick={() => {
+                                  setEditingAnnotation(null);
+                                  setActiveAnnotationIndex(null);
+                                }}
                                 className={cn(
                                   "px-2 py-1 rounded text-sm",
                                   isDarkMode
@@ -928,32 +969,63 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
                                 Cancel
                               </button>
                               <button
-                                onClick={handleAnnotationSave}
+                                onClick={() => {
+                                  if (!editingAnnotation) return;
+                                  
+                                  // Update the text in the appropriate state
+                                  const isTempAnnotation = tempAnnotations.some(ann => ann.id === editingAnnotation.id);
+                                  
+                                  if (isTempAnnotation) {
+                                    setTempAnnotations(prev =>
+                                      prev.map(ann =>
+                                        ann.id === editingAnnotation.id ? { ...ann, text: editingAnnotation.text } : ann
+                                      )
+                                    );
+                                  } else if (selectedSnag) {
+                                    setSelectedSnag(prev => {
+                                      if (!prev) return null;
+                                      return {
+                                        ...prev,
+                                        annotations: prev.annotations.map(ann =>
+                                          ann.id === editingAnnotation.id ? { ...ann, text: editingAnnotation.text } : ann
+                                        )
+                                      };
+                                    });
+                                  }
+                                  
+                                  setEditingAnnotation(null);
+                                  setActiveAnnotationIndex(index);
+                                  setHasUnsavedChanges(true);
+                                }}
                                 className="px-2 py-1 rounded text-sm bg-blue-500 text-white hover:bg-blue-600"
                               >
-                                Save
+                                Done
                               </button>
                             </div>
                           </div>
                         ) : (
                           <div className="flex-1">
                             <p className={`text-sm ${isDarkMode ? "text-gray-200" : "text-gray-700"}`}>
-                              {annotation.text}
+                              {annotation.text || 'No description'}
                             </p>
                             {isEditingAnnotations && (
-                              <div className="flex gap-2 mt-2">
-                                <button
-                                  onClick={() => setEditingAnnotation({ id: annotation.id, text: annotation.text })}
-                                  className="text-xs text-blue-500 hover:text-blue-600"
+                              <div className="flex gap-2 mt-2" onClick={e => e.stopPropagation()}>
+                                <div
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingAnnotation({ id: annotation.id, text: annotation.text });
+                                    setActiveAnnotationIndex(index);
+                                  }}
+                                  className="text-xs text-blue-500 hover:text-blue-600 cursor-pointer"
                                 >
                                   Edit
-                                </button>
-                                <button
-                                  onClick={() => handleAnnotationDelete(annotation.id)}
-                                  className="text-xs text-red-500 hover:text-red-600"
+                                </div>
+                                <div
+                                  onClick={(e) => handleDeleteClick(e, index, annotation)}
+                                  className="text-xs text-red-500 hover:text-red-600 cursor-pointer"
                                 >
                                   Delete
-                                </button>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -998,7 +1070,7 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
             )}
             style={{
               top: dragPosition.y,
-              left: dragPosition.x,
+              right: dragPosition.right,
               transform: 'none' // Remove the translate since we're using absolute positioning
             }}
           >
@@ -1247,6 +1319,88 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
               >
                 Save Changes
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Save Button for all changes - Ensure high z-index and proper positioning */}
+      {hasUnsavedChanges && !editingAnnotation && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-2 z-[150]">
+          <button
+            onClick={async () => {
+              await handleSaveAnnotations();
+              closeAnnotationView();
+            }}
+            disabled={isProcessingAction}
+            className={cn(
+              "px-6 py-3 rounded-full transition-colors shadow-lg",
+              "bg-green-500 text-white hover:bg-green-600",
+              "text-base font-medium",
+              isProcessingAction && "opacity-50 cursor-not-allowed"
+            )}
+          >
+            {isProcessingAction ? "Saving Changes..." : "Save All Changes and Exit"}
+          </button>
+        </div>
+      )}
+
+      {/* Exit Confirmation Dialog */}
+      {showExitDialog && (
+        <div 
+          className="fixed inset-0 bg-black/80 z-[200] flex items-center justify-center"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className={cn(
+            "w-[400px] rounded-lg shadow-xl",
+            isDarkMode ? "bg-gray-800" : "bg-white"
+          )}>
+            <div className={cn(
+              "px-6 py-4 border-b",
+              isDarkMode ? "border-gray-700" : "border-gray-200"
+            )}>
+              <div className="flex items-center gap-3">
+                <AlertTriangle className={cn(
+                  "h-5 w-5",
+                  isDarkMode ? "text-yellow-500" : "text-yellow-600"
+                )} />
+                <h3 className={cn(
+                  "text-lg font-semibold",
+                  isDarkMode ? "text-white" : "text-gray-900"
+                )}>
+                  Unsaved Changes
+                </h3>
+              </div>
+              <p className={cn(
+                "text-sm mt-2",
+                isDarkMode ? "text-gray-300" : "text-gray-600"
+              )}>
+                You have unsaved changes. Would you like to save them before closing?
+              </p>
+            </div>
+            <div className={cn(
+              "px-6 py-4 flex justify-end gap-3",
+              isDarkMode ? "bg-gray-800" : "bg-white"
+            )}>
+              <button
+                onClick={() => closeWindow()}
+                className={cn(
+                  "px-4 py-2 rounded-md text-sm font-medium transition-colors",
+                  isDarkMode 
+                    ? "bg-gray-700 text-gray-200 hover:bg-gray-600" 
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                )}
+              >
+                Discard Changes
+              </button>
+              <button
+                onClick={async () => {
+                  await handleSaveAndExit();
+                }}
+                className="px-4 py-2 rounded-md text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+              >
+                Save & Close
+              </button>
             </div>
           </div>
         </div>

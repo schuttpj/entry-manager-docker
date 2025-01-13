@@ -4,6 +4,7 @@ import { Annotation } from '../types/snag';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { toast } from 'sonner';
 
 interface ImageAnnotatorProps {
   imageUrl: string;
@@ -65,9 +66,28 @@ export default function ImageAnnotator({ imageUrl, existingAnnotations = [], onS
   };
 
   const handleSave = () => {
+    console.log('Saving annotations:', annotations);
     // Filter out annotations without text before saving
     const validAnnotations = annotations.filter(ann => ann.text?.trim());
+    console.log('Valid annotations to save:', validAnnotations);
     onSave(validAnnotations);
+    toast.success('Annotations saved successfully');
+  };
+
+  const handleCommentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAnnotation || !comment.trim()) return;
+
+    console.log('Saving comment for pin:', selectedAnnotation);
+    setAnnotations(annotations.map(pin => 
+      pin.id === selectedAnnotation 
+        ? { ...pin, text: comment.trim() }
+        : pin
+    ));
+    setComment('');
+    setSelectedAnnotation(null);
+    // Trigger save after updating the annotation
+    handleSave();
   };
 
   return (

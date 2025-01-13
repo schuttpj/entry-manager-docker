@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getSnagsByProject, deleteSnag, updateSnag, updateSnagAnnotations, getSnag } from '@/lib/db';
-import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare, AlertCircle, Calendar, Grid } from 'lucide-react';
+import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare, AlertCircle, Calendar, Grid, List } from 'lucide-react';
 import { format } from 'date-fns';
 import { Annotation, Snag } from '@/types/snag';
 import ImageAnnotator from './ImageAnnotator';
@@ -8,6 +8,7 @@ import { SnagListItem } from './SnagListItem';
 import { PDFExport } from './PDFExport';
 import PDFExportList from './PDFExportList';
 import { Checkbox } from "@/components/ui/checkbox";
+import { GridView } from './GridView';
 import {
   Dialog,
   DialogContent,
@@ -25,9 +26,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import confetti from 'canvas-confetti';
 import { toast } from 'sonner';
-import { GridView } from './GridView';
 
 interface EditState {
   description: string;
@@ -53,6 +54,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedSnags, setSelectedSnags] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [isGridViewOpen, setIsGridViewOpen] = useState(false);
   const [editState, setEditState] = useState<EditState>({
     description: '',
     priority: 'Medium',
@@ -71,7 +74,6 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
   const [completionDateDialogOpen, setCompletionDateDialogOpen] = useState(false);
   const [completionDate, setCompletionDate] = useState<string>('');
   const [snagToComplete, setSnagToComplete] = useState<Snag | null>(null);
-  const [isGridViewOpen, setIsGridViewOpen] = useState(false);
 
   // Add this function to calculate actual position
   const calculatePinPosition = (annotation: Annotation, image: HTMLImageElement) => {
@@ -431,193 +433,148 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
   }
 
   return (
-    <div className={`rounded-lg shadow transition-colors duration-300 ${
-      isDarkMode ? 'bg-gray-800' : 'bg-white'
-    }`}>
-      {/* Header with search and sort */}
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center">
-          {/* Left Section */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <h2 className={`text-xl font-semibold transition-colors duration-300 ${
-              isDarkMode ? 'text-white' : 'text-gray-900'
-            }`}>Entry List</h2>
-            <div className="relative w-full sm:w-[200px]">
-              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                type="text"
-                placeholder="Search entries..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 w-full h-8 text-sm"
-              />
-            </div>
-            {filteredSnags.length > 0 && (
-              <div
-                className="flex items-center gap-2 h-9 px-4 py-2 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer"
-                onClick={() => {
-                  const allSelected = filteredSnags.length === selectedSnags.size;
-                  if (allSelected) {
-                    setSelectedSnags(new Set());
-                  } else {
-                    setSelectedSnags(new Set(filteredSnags.map(snag => snag.id)));
-                  }
-                }}
-              >
-                <Checkbox 
-                  checked={filteredSnags.length > 0 && filteredSnags.length === selectedSnags.size}
-                  className="h-4 w-4 border-2"
-                />
-                <span className="text-sm">Select All</span>
-              </div>
-            )}
+    <div className="space-y-4">
+      {/* Header with Search and Controls */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1 flex items-center gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              type="text"
+              placeholder="Search entries..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`pl-10 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white'}`}
+            />
           </div>
-
-          {/* Right Section */}
-          <div className="flex items-center gap-4">
-            <Select
-              value={sortBy}
-              onValueChange={(value) => setSortBy(value as SortOption)}
+          {filteredSnags.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const allSelected = filteredSnags.length === selectedSnags.size;
+                if (allSelected) {
+                  setSelectedSnags(new Set());
+                } else {
+                  setSelectedSnags(new Set(filteredSnags.map(snag => snag.id)));
+                }
+              }}
+              className={`${isDarkMode ? 'border-gray-700' : ''}`}
             >
-              <SelectTrigger className="w-[180px]">
-                <SortDesc className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="newest">Newest First</SelectItem>
-                <SelectItem value="oldest">Oldest First</SelectItem>
-                <SelectItem value="priority">By Priority</SelectItem>
-                <SelectItem value="status">By Status</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setIsGridViewOpen(true)}
-                className="h-9 w-9"
-              >
-                <Grid className="h-4 w-4" />
-                <span className="sr-only">Grid View</span>
-              </Button>
+              <Checkbox 
+                checked={filteredSnags.length > 0 && filteredSnags.length === selectedSnags.size}
+                className="h-4 w-4 mr-2"
+              />
+              Select All
+            </Button>
+          )}
+          <Select value={sortBy} onValueChange={(value: SortOption) => setSortBy(value)}>
+            <SelectTrigger className={`w-[180px] ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white'}`}>
+              <SortDesc className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest First</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+              <SelectItem value="priority">By Priority</SelectItem>
+              <SelectItem value="status">By Status</SelectItem>
+            </SelectContent>
+          </Select>
+          <ToggleGroup type="single" value={viewMode} onValueChange={(value: 'list' | 'grid') => {
+            if (value) {
+              setViewMode(value);
+              if (value === 'grid') {
+                setIsGridViewOpen(true);
+              }
+            }
+          }}>
+            <ToggleGroupItem value="list" aria-label="List View">
+              <List className="h-4 w-4" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="grid" aria-label="Grid View">
+              <Grid className="h-4 w-4" />
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+        <div className="flex items-center gap-2">
+          {selectedSnags.size > 0 && (
+            <>
               <PDFExport 
-                snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))} 
-                projectName={projectName} 
+                snags={snags.filter(snag => selectedSnags.has(snag.id))}
+                projectName={projectName}
               />
               <PDFExportList
-                snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))} 
-                projectName={projectName} 
+                snags={snags.filter(snag => selectedSnags.has(snag.id))}
+                projectName={projectName}
+                onClose={() => setSelectedSnags(new Set())}
+                isDarkMode={isDarkMode}
               />
-            </div>
-          </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Snag List */}
-      {filteredSnags.length === 0 ? (
-        <div className={`p-8 text-center transition-colors duration-300 ${
-          isDarkMode ? 'text-gray-400' : 'text-gray-500'
-        }`}>
-          {searchTerm ? 'No entries match your search.' : 'No entries added yet. Upload photos to get started.'}
-        </div>
-      ) : (
-        <div className="divide-y divide-gray-200">
-          {filteredSnags.map((snag) => (
-            <div key={snag.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
-              {editingId === snag.id ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="name">Name</Label>
-                      <Input
-                        id="name"
-                        value={editState.name || ''}
-                        onChange={(e) => setEditState(prev => ({ ...prev, name: e.target.value }))}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="description">Description</Label>
-                      <Input
-                        id="description"
-                        value={editState.description || ''}
-                        onChange={(e) => setEditState(prev => ({ ...prev, description: e.target.value }))}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="location">Location</Label>
-                      <Input
-                        id="location"
-                        value={editState.location || ''}
-                        onChange={(e) => setEditState(prev => ({ ...prev, location: e.target.value }))}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="assignedTo">Assigned To</Label>
-                      <Input
-                        id="assignedTo"
-                        value={editState.assignedTo || ''}
-                        onChange={(e) => setEditState(prev => ({ ...prev, assignedTo: e.target.value }))}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="priority">Priority</Label>
-                      <Select
-                        value={editState.priority}
-                        onValueChange={(value: 'Low' | 'Medium' | 'High') => setEditState(prev => ({ ...prev, priority: value }))}
-                      >
-                        <SelectTrigger id="priority" className="mt-1">
-                          <SelectValue placeholder="Select priority" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Low">Low</SelectItem>
-                          <SelectItem value="Medium">Medium</SelectItem>
-                          <SelectItem value="High">High</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="status">Status</Label>
-                      <Select
-                        value={editState.status}
-                        onValueChange={handleStatusChange}
-                      >
-                        <SelectTrigger id="status" className="mt-1">
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="In Progress">In Progress</SelectItem>
-                          <SelectItem value="Completed">Completed</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={cancelEditing}>
-                      Cancel
-                    </Button>
-                    <Button onClick={() => saveChanges(snag)}>
-                      Save Changes
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <SnagListItem
-                  snag={snag}
-                  onEdit={startEditing}
-                  onDelete={(id) => setDeleteConfirmId(id)}
-                  onViewAnnotations={handleViewAnnotations}
-                  isSelected={selectedSnags.has(snag.id)}
-                  onToggleSelect={handleToggleSelect}
-                />
-              )}
-            </div>
-          ))}
+      {/* Error Message */}
+      {error && (
+        <div className={`p-4 rounded-lg flex items-center gap-2 ${isDarkMode ? 'bg-red-900/20 text-red-400' : 'bg-red-50 text-red-600'}`}>
+          <AlertCircle className="h-5 w-5" />
+          <p>{error}</p>
         </div>
       )}
+
+      {/* Loading State */}
+      {loading ? (
+        <div className={`text-center py-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          Loading entries...
+        </div>
+      ) : filteredSnags.length === 0 ? (
+        <div className={`text-center py-8 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+          No entries found.
+        </div>
+      ) : viewMode === 'list' ? (
+        <div className="space-y-4">
+          {/* List View */}
+          {filteredSnags.map((snag) => (
+            <SnagListItem
+              key={snag.id}
+              snag={snag}
+              isSelected={selectedSnags.has(snag.id)}
+              onToggleSelect={() => handleToggleSelect(snag)}
+              onEdit={() => startEditing(snag)}
+              onDelete={() => setDeleteConfirmId(snag.id)}
+              onViewAnnotations={() => handleViewAnnotations(snag)}
+              isDarkMode={isDarkMode}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {/* Grid View */}
+      <GridView
+        snags={filteredSnags}
+        isOpen={isGridViewOpen}
+        onClose={() => {
+          setIsGridViewOpen(false);
+          setViewMode('list');
+        }}
+        isDarkMode={isDarkMode}
+        onSnagUpdate={async (updatedSnag) => {
+          try {
+            const { id, projectName, ...snagData } = updatedSnag;
+            const snagToUpdate = {
+              ...snagData,
+              updatedAt: new Date(updatedSnag.updatedAt),
+              createdAt: new Date(updatedSnag.createdAt),
+              completionDate: updatedSnag.completionDate ? new Date(updatedSnag.completionDate) : undefined
+            };
+            await updateSnag(id, snagToUpdate);
+            handleUploadComplete();
+          } catch (error) {
+            console.error('Failed to update snag:', error);
+            toast.error('Failed to update entry');
+          }
+        }}
+      />
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
@@ -680,21 +637,6 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
         />
       )}
 
-      {error && (
-        <div className={`p-4 rounded-lg flex items-center space-x-2 ${
-          isDarkMode ? 'bg-red-900/20 text-red-200' : 'bg-red-50 text-red-800'
-        }`}>
-          <AlertCircle className="w-5 h-5" />
-          <span>{error}</span>
-          <button 
-            onClick={() => setError(null)}
-            className="ml-auto hover:opacity-70"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
       {/* Completion Date Dialog */}
       <Dialog open={completionDateDialogOpen} onOpenChange={setCompletionDateDialogOpen}>
         <DialogContent className="bg-white dark:bg-gray-800 border-0 shadow-lg sm:max-w-[425px]">
@@ -739,53 +681,129 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
         </DialogContent>
       </Dialog>
 
-      {/* Add GridView component */}
-      <GridView
-        snags={filteredSnags}
-        isOpen={isGridViewOpen}
-        onClose={() => setIsGridViewOpen(false)}
-        isDarkMode={isDarkMode}
-        onSnagUpdate={async (updatedSnag) => {
-          try {
-            // First update the database
-            await updateSnag(updatedSnag.id, {
-              name: updatedSnag.name,
-              description: updatedSnag.description,
-              status: updatedSnag.status,
-              priority: updatedSnag.priority,
-              location: updatedSnag.location,
-              assignedTo: updatedSnag.assignedTo
-            });
+      {/* Edit Dialog */}
+      {editingId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className={`rounded-lg p-6 max-w-md w-full mx-4 space-y-4 transition-colors duration-300 ${
+            isDarkMode ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            <div className="flex justify-between items-center">
+              <h3 className={`text-lg font-semibold transition-colors duration-300 ${
+                isDarkMode ? 'text-white' : 'text-gray-900'
+              }`}>Edit Entry</h3>
+              <button
+                onClick={cancelEditing}
+                className={`rounded-full p-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
+              >
+                <X className={`h-5 w-5 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`} />
+              </button>
+            </div>
 
-            // Update both snags and filteredSnags states
-            const newSnag = {
-              ...updatedSnag,
-              updatedAt: new Date().toISOString(),
-              ...(updatedSnag.status === 'Completed' && { completionDate: new Date().toISOString() })
-            };
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name" className={isDarkMode ? 'text-gray-200' : 'text-gray-700'}>
+                  Name
+                </Label>
+                <Input
+                  id="name"
+                  value={editState.name}
+                  onChange={(e) => setEditState((prev) => ({ ...prev, name: e.target.value }))}
+                  className={`${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white'}`}
+                />
+              </div>
 
-            setSnags(prevSnags => 
-              prevSnags.map(s => s.id === updatedSnag.id ? newSnag : s)
-            );
+              <div className="space-y-2">
+                <Label htmlFor="description" className={isDarkMode ? 'text-gray-200' : 'text-gray-700'}>
+                  Description
+                </Label>
+                <Input
+                  id="description"
+                  value={editState.description}
+                  onChange={(e) => setEditState((prev) => ({ ...prev, description: e.target.value }))}
+                  className={`${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white'}`}
+                />
+              </div>
 
-            // Show success toast
-            toast.success('Changes saved successfully', {
-              duration: 3000,
-              className: isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
-            });
+              <div className="space-y-2">
+                <Label htmlFor="priority" className={isDarkMode ? 'text-gray-200' : 'text-gray-700'}>
+                  Priority
+                </Label>
+                <Select
+                  value={editState.priority}
+                  onValueChange={(value: 'Low' | 'Medium' | 'High') =>
+                    setEditState((prev) => ({ ...prev, priority: value }))
+                  }
+                >
+                  <SelectTrigger className={`w-full ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white'}`}>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Low">Low</SelectItem>
+                    <SelectItem value="Medium">Medium</SelectItem>
+                    <SelectItem value="High">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-            // Trigger a refresh to ensure all views are in sync
-            handleUploadComplete();
-          } catch (error) {
-            console.error('Error updating snag:', error);
-            // Show error toast
-            toast.error('Failed to save changes', {
-              duration: 3000,
-              className: isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
-            });
-          }
-        }}
-      />
+              <div className="space-y-2">
+                <Label htmlFor="status" className={isDarkMode ? 'text-gray-200' : 'text-gray-700'}>
+                  Status
+                </Label>
+                <Select
+                  value={editState.status}
+                  onValueChange={handleStatusChange}
+                >
+                  <SelectTrigger className={`w-full ${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white'}`}>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="In Progress">In Progress</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="location" className={isDarkMode ? 'text-gray-200' : 'text-gray-700'}>
+                  Location
+                </Label>
+                <Input
+                  id="location"
+                  value={editState.location}
+                  onChange={(e) => setEditState((prev) => ({ ...prev, location: e.target.value }))}
+                  className={`${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white'}`}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="assignedTo" className={isDarkMode ? 'text-gray-200' : 'text-gray-700'}>
+                  Assigned To
+                </Label>
+                <Input
+                  id="assignedTo"
+                  value={editState.assignedTo}
+                  onChange={(e) => setEditState((prev) => ({ ...prev, assignedTo: e.target.value }))}
+                  className={`${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white'}`}
+                />
+              </div>
+            </div>
+
+            <div className="pt-4 border-t flex justify-end gap-3">
+              <Button variant="outline" onClick={cancelEditing}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  const snag = snags.find((s) => s.id === editingId);
+                  if (snag) saveChanges(snag);
+                }}
+              >
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
