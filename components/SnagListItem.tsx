@@ -40,12 +40,12 @@ export function SnagListItem({
 
   const formattedDate = React.useMemo(() => {
     try {
-      return formatDate(snag.createdAt);
+      return formatDate(snag.observationDate);
     } catch (error) {
       console.error('Error formatting date:', error);
       return 'Invalid date';
     }
-  }, [snag.createdAt]);
+  }, [snag.observationDate]);
 
   const priorityColors = getPriorityColor(snag.priority);
 

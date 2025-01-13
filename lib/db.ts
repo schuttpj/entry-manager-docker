@@ -19,13 +19,7 @@ function updateConnectionStatus(newStatus: typeof connectionStatus) {
 }
 
 interface SnagListDB {
-  snags: SnagListDBSchema['snags'];
-  projects: SnagListDBSchema['projects'];
-}
-
-interface SnagListDBSchema {
   snags: {
-    key: string;
     value: {
       id: string;
       projectName: string;
@@ -39,23 +33,19 @@ interface SnagListDBSchema {
       location: string;
       createdAt: Date;
       updatedAt: Date;
+      completionDate: Date | null;
+      observationDate: Date;
       annotations: Annotation[];
     };
-    indexes: {
-      'by-project': string;
-    };
+    indexes: { 'by-project': string };
   };
   projects: {
-    key: string;
     value: {
-      id: string;
       name: string;
       createdAt: Date;
       updatedAt: Date;
     };
-    indexes: {
-      'by-name': string;
-    };
+    key: string;
   };
 }
 
@@ -66,10 +56,14 @@ interface SnagUpdate {
   status?: 'In Progress' | 'Completed';
   location?: string;
   completionDate?: string | Date | null;
+  observationDate?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+  name?: string;
 }
 
 const DB_NAME = 'snag-list-db';
-const DB_VERSION = 10;
+const DB_VERSION = 11;
 
 export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
   try {
@@ -124,6 +118,21 @@ export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
               await store.put(snag);
             }
           }
+        }
+
+        // Version 11: Ensure createdAt is properly handled as Date
+        if (oldVersion < 11) {
+          const tx = db.transaction('snags', 'readwrite');
+          const store = tx.objectStore('snags');
+          const snags = await store.getAll();
+          
+          for (const snag of snags) {
+            if (snag.createdAt) {
+              snag.createdAt = new Date(snag.createdAt);
+              await store.put(snag);
+            }
+          }
+          await tx.done;
         }
       },
     });
@@ -270,9 +279,11 @@ export async function addSnag(snag: Omit<SnagListDB['snags']['value'], 'id' | 'c
         assignedTo: snag.assignedTo || '',
         status: snag.status || 'In Progress',
         location: snag.location || '',
+        completionDate: snag.completionDate || null,
+        observationDate: snag.observationDate || new Date(),
         annotations: [],
         createdAt: now,
-        updatedAt: now,
+        updatedAt: now
       };
 
       await store.add(newSnag);
@@ -295,7 +306,7 @@ export async function getSnag(id: string) {
   return snag;
 }
 
-export async function updateSnag(id: string, snag: Partial<Omit<SnagListDB['snags']['value'], 'id' | 'createdAt' | 'annotations'>>) {
+export async function updateSnag(id: string, snag: Partial<Omit<SnagListDB['snags']['value'], 'id' | 'annotations'>>) {
   const db = await getDB();
   const existingSnag = await getSnag(id);
   
@@ -315,7 +326,9 @@ export async function updateSnag(id: string, snag: Partial<Omit<SnagListDB['snag
     ...existingSnag,
     ...snag,
     name,
+    createdAt: snag.createdAt ? new Date(snag.createdAt) : existingSnag.createdAt,
     updatedAt: new Date(),
+    observationDate: snag.observationDate ? new Date(snag.observationDate) : existingSnag.observationDate
   });
 }
 

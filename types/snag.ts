@@ -20,5 +20,6 @@ export interface Snag {
   createdAt: string | Date;
   updatedAt: string | Date;
   completionDate: string | Date | null;
+  observationDate: string | Date;
   annotations: Annotation[];
 } 

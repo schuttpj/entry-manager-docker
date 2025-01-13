@@ -1,6 +1,6 @@
 "use client"
 
-import { X, Grid, Info, Calendar, User, MapPin, AlertTriangle, MessageCircle, GripHorizontal, Pencil } from 'lucide-react';
+import { X, Grid, Info, Calendar, User, MapPin, AlertTriangle, MessageCircle, GripHorizontal, Pencil, Search, SortDesc, XCircle } from 'lucide-react';
 import { Snag, Annotation } from '@/types/snag';
 import Image from 'next/image';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -51,6 +51,7 @@ interface EditState {
   status: 'In Progress' | 'Completed';
   name: string;
   location: string;
+  observationDate: string;
 }
 
 function AnnotationPin({ number, x, y, text, isActive, onClick, isDarkMode, isTemporary }: AnnotationPinProps) {
@@ -177,9 +178,9 @@ function DetailsCard({ snag, onClose, onEdit, isDarkMode, position }: DetailsCar
             <div className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
               <div className="flex items-center gap-1 text-xs font-medium mb-1">
                 <Calendar className="h-3 w-3" />
-                <span>Created</span>
+                <span>Observation Date</span>
               </div>
-              <p className="text-xs">{format(new Date(snag.createdAt), 'MMM d, yyyy')}</p>
+              <p className="text-xs">{format(new Date(snag.observationDate), 'MMM d, yyyy')}</p>
             </div>
             {snag.completionDate && (
               <div className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -220,7 +221,8 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
     assignedTo: '',
     status: 'In Progress',
     name: '',
-    location: ''
+    location: '',
+    observationDate: format(new Date(), 'yyyy-MM-dd')
   });
 
   // Dragging state
@@ -238,6 +240,10 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
 
   // Add this near the top of the component, with other state
   const [showExitDialog, setShowExitDialog] = useState(false);
+
+  // Add state for search/filter
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredGridSnags, setFilteredGridSnags] = useState<Snag[]>(snags);
 
   // Update ref when window opens/closes
   useEffect(() => {
@@ -631,7 +637,8 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
       assignedTo: snag.assignedTo || '',
       status: snag.status,
       name: snag.name || '',
-      location: snag.location || ''
+      location: snag.location || '',
+      observationDate: snag.observationDate ? format(new Date(snag.observationDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
     });
     setSelectedDetails(null); // Close the details card
   };
@@ -697,15 +704,70 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Add effect to filter snags when search term changes
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredGridSnags(snags);
+      return;
+    }
+
+    const filtered = snags.filter(snag => 
+      (snag.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (snag.assignedTo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (snag.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (snag.priority || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (snag.status || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (snag.location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(snag.snagNumber).includes(searchTerm) ||
+      snag.annotations?.some(annotation => 
+        (annotation.text || '').toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    );
+    
+    setFilteredGridSnags(filtered);
+  }, [searchTerm, snags]);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 overflow-hidden">
       {/* Header */}
       <div className={`fixed top-0 left-0 right-0 h-16 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg flex items-center justify-between px-6 z-10`}>
-        <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-          Grid View
-        </h2>
+        <div className="flex items-center gap-6 flex-1">
+          <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            Grid View
+          </h2>
+          <div className="relative max-w-md flex-1">
+            <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
+            <input
+              type="text"
+              placeholder="Search entries..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`w-full pl-10 ${searchTerm ? 'pr-10' : 'pr-4'} py-2 rounded-full text-sm ${
+                isDarkMode 
+                  ? 'bg-gray-700/50 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500' 
+                  : 'bg-gray-100/50 border-gray-200 text-gray-900 placeholder-gray-500 focus:border-blue-500'
+              } border focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-colors`}
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded-full 
+                  ${isDarkMode 
+                    ? 'hover:bg-gray-600/50 text-gray-400 hover:text-gray-300' 
+                    : 'hover:bg-gray-200/50 text-gray-500 hover:text-gray-700'
+                  } transition-colors`}
+                title="Clear search"
+              >
+                <XCircle className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <div className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            {filteredGridSnags.length} {filteredGridSnags.length === 1 ? 'entry' : 'entries'}
+          </div>
+        </div>
         <button
           onClick={handleCloseClick}
           className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
@@ -714,70 +776,80 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
         </button>
       </div>
 
-      {/* Grid Container */}
+      {/* Grid Container - Update to use filteredGridSnags */}
       <div className="mt-16 p-6 overflow-y-auto h-[calc(100vh-4rem)]">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {snags.map((snag, index) => (
-            <div
-              key={snag.id}
-              className={`relative group aspect-square rounded-lg overflow-hidden border ${
-                isDarkMode ? 'border-gray-700' : 'border-gray-200'
-              } hover:border-blue-500 transition-all cursor-pointer`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedImage(snag.photoPath);
-                setSelectedSnag(snag);
-              }}
-              onMouseEnter={() => setHoveredId(snag.id)}
-              onMouseLeave={() => setHoveredId(null)}
-            >
-              {/* Entry Number and Status */}
-              <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
-                <div className="bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium">
-                  #{snag.snagNumber}
-                </div>
-                {snag.status === 'Completed' && (
-                  <div className="bg-green-500/90 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-white" />
-                    Completed
-                  </div>
-                )}
-              </div>
-
-              {/* Details Button */}
-              <button
-                onClick={(e) => handleDetailsClick(e, snag)}
-                className={cn(
-                  "absolute top-3 right-3 z-10 p-2 rounded-full transition-all duration-300 transform",
-                  hoveredId === snag.id 
-                    ? "scale-100 rotate-0 bg-white/90 hover:bg-white" 
-                    : "scale-0 rotate-180 bg-white/70",
-                  isDarkMode && hoveredId === snag.id && "bg-gray-800/90 hover:bg-gray-800"
-                )}
-              >
-                <Info className={cn(
-                  "h-5 w-5 transition-transform duration-300",
-                  isDarkMode ? "text-white" : "text-gray-800",
-                  hoveredId === snag.id && "animate-pulse"
-                )} />
-              </button>
-
-              <Image
-                src={snag.photoPath}
-                alt={snag.description || 'Snag image'}
-                fill
-                className="object-cover group-hover:scale-105 transition-transform duration-200"
-                sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-              />
-              
-              {/* Description Overlay */}
-              <div className={`absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4`}>
-                <p className="text-white text-sm line-clamp-2">
-                  {snag.description || 'No description'}
-                </p>
-              </div>
+          {filteredGridSnags.length === 0 ? (
+            <div className={`col-span-full flex flex-col items-center justify-center py-12 ${
+              isDarkMode ? 'text-gray-400' : 'text-gray-500'
+            }`}>
+              <Search className="h-12 w-12 mb-4 opacity-50" />
+              <p className="text-lg font-medium">No entries found</p>
+              <p className="text-sm opacity-75">Try adjusting your search terms</p>
             </div>
-          ))}
+          ) : (
+            filteredGridSnags.map((snag, index) => (
+              <div
+                key={snag.id}
+                className={`relative group aspect-square rounded-lg overflow-hidden border ${
+                  isDarkMode ? 'border-gray-700' : 'border-gray-200'
+                } hover:border-blue-500 transition-all cursor-pointer`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedImage(snag.photoPath);
+                  setSelectedSnag(snag);
+                }}
+                onMouseEnter={() => setHoveredId(snag.id)}
+                onMouseLeave={() => setHoveredId(null)}
+              >
+                {/* Entry Number and Status */}
+                <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
+                  <div className="bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium">
+                    #{snag.snagNumber}
+                  </div>
+                  {snag.status === 'Completed' && (
+                    <div className="bg-green-500/90 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                      Completed
+                    </div>
+                  )}
+                </div>
+
+                {/* Details Button */}
+                <button
+                  onClick={(e) => handleDetailsClick(e, snag)}
+                  className={cn(
+                    "absolute top-3 right-3 z-10 p-2 rounded-full transition-all duration-300 transform",
+                    hoveredId === snag.id 
+                      ? "scale-100 rotate-0 bg-white/90 hover:bg-white" 
+                      : "scale-0 rotate-180 bg-white/70",
+                    isDarkMode && hoveredId === snag.id && "bg-gray-800/90 hover:bg-gray-800"
+                  )}
+                >
+                  <Info className={cn(
+                    "h-5 w-5 transition-transform duration-300",
+                    isDarkMode ? "text-white" : "text-gray-800",
+                    hoveredId === snag.id && "animate-pulse"
+                  )} />
+                </button>
+
+                <Image
+                  src={snag.photoPath}
+                  alt={snag.description || 'Snag image'}
+                  fill
+                  className="object-cover group-hover:scale-105 transition-transform duration-200"
+                  sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                />
+                
+                {/* Description Overlay */}
+                <div className={`absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4`}>
+                  <p className="text-white text-sm line-clamp-2">
+                    {snag.description || 'No description'}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -1088,7 +1160,7 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
                     "px-3 py-1 rounded-full text-sm font-medium",
                     isDarkMode ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900"
                   )}>
-                    #{snags.findIndex(s => s.id === editingId) + 1}
+                    #{snags.find(s => s.id === editingId)?.snagNumber || ''}
                   </div>
                   <h2 className={cn(
                     "text-lg font-semibold",
@@ -1252,6 +1324,29 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
 
               <div className="space-y-2">
                 <Label 
+                  htmlFor="observationDate"
+                  className={isDarkMode ? "text-gray-200" : "text-gray-700"}
+                >
+                  Observation Date
+                </Label>
+                <Input
+                  id="observationDate"
+                  type="date"
+                  value={editState.observationDate}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => 
+                    setEditState((prev: EditState) => ({ ...prev, observationDate: e.target.value }))
+                  }
+                  className={cn(
+                    "border",
+                    isDarkMode 
+                      ? "bg-gray-700 border-gray-600 text-white" 
+                      : "bg-white border-gray-200 text-gray-900"
+                  )}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label 
                   htmlFor="assignedTo"
                   className={isDarkMode ? "text-gray-200" : "text-gray-700"}
                 >
@@ -1300,6 +1395,7 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
                       priority: editState.priority,
                       location: editState.location,
                       assignedTo: editState.assignedTo,
+                      observationDate: new Date(editState.observationDate),
                       updatedAt: new Date().toISOString(),
                       ...(editState.status === 'Completed' && { completionDate: new Date().toISOString() })
                     };

@@ -37,6 +37,7 @@ interface EditState {
   status: 'In Progress' | 'Completed';
   name: string;
   location: string;
+  observationDate: string;
 }
 
 interface SnagListProps {
@@ -46,7 +47,7 @@ interface SnagListProps {
   handleUploadComplete: () => void;
 }
 
-type SortOption = 'newest' | 'oldest' | 'priority' | 'status';
+type SortOption = 'newest' | 'oldest' | 'priority' | 'status' | 'entry-asc' | 'entry-desc';
 
 export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, handleUploadComplete }: SnagListProps) {
   const [snags, setSnags] = useState<Snag[]>([]);
@@ -62,7 +63,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
     assignedTo: '',
     status: 'In Progress',
     name: '',
-    location: ''
+    location: '',
+    observationDate: format(new Date(), 'yyyy-MM-dd')
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -171,6 +173,10 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
           return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         case 'status':
           return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        case 'entry-asc':
+          return a.snagNumber - b.snagNumber;
+        case 'entry-desc':
+          return b.snagNumber - a.snagNumber;
         default:
           return 0;
       }
@@ -207,7 +213,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
       assignedTo: snag.assignedTo || '',
       status: snag.status,
       name: snag.name || '',
-      location: snag.location || ''
+      location: snag.location || '',
+      observationDate: snag.observationDate ? format(new Date(snag.observationDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
     });
   };
 
@@ -219,7 +226,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
       assignedTo: '',
       status: 'In Progress',
       name: '',
-      location: ''
+      location: '',
+      observationDate: format(new Date(), 'yyyy-MM-dd')
     });
   };
 
@@ -227,16 +235,37 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
     // Store the original snag state
     const originalSnag = { ...snag };
     
+    // Create date object from the editState date
+    const observationDate = new Date(editState.observationDate);
+    
     // Optimistically update the UI
     setSnags(snags.map(s => 
       s.id === snag.id 
-        ? { ...s, ...editState, updatedAt: new Date() } 
+        ? { 
+            ...s, 
+            ...editState, 
+            observationDate: observationDate,
+            updatedAt: new Date() 
+          } 
         : s
     ));
     setEditingId(null);
 
     try {
-      await updateSnag(snag.id, editState);
+      // Convert dates to the correct format for the database
+      const updateData = {
+        description: editState.description,
+        priority: editState.priority,
+        assignedTo: editState.assignedTo,
+        status: editState.status,
+        name: editState.name,
+        location: editState.location,
+        observationDate: observationDate
+      };
+
+      await updateSnag(snag.id, updateData);
+      // Trigger a refresh to ensure UI is in sync with database
+      handleUploadComplete();
     } catch (error) {
       console.error('Failed to update snag:', error);
       // Revert the optimistic update
@@ -448,9 +477,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
             />
           </div>
           {filteredSnags.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
+            <div
               onClick={() => {
                 const allSelected = filteredSnags.length === selectedSnags.size;
                 if (allSelected) {
@@ -459,14 +486,17 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
                   setSelectedSnags(new Set(filteredSnags.map(snag => snag.id)));
                 }
               }}
-              className={`${isDarkMode ? 'border-gray-700' : ''}`}
+              className={`inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-md border transition-colors cursor-pointer
+                ${isDarkMode 
+                  ? 'border-gray-700 hover:bg-gray-800' 
+                  : 'border-gray-200 hover:bg-gray-50'}`}
             >
               <Checkbox 
                 checked={filteredSnags.length > 0 && filteredSnags.length === selectedSnags.size}
                 className="h-4 w-4 mr-2"
               />
               Select All
-            </Button>
+            </div>
           )}
           <Select value={sortBy} onValueChange={(value: SortOption) => setSortBy(value)}>
             <SelectTrigger className={`w-[180px] ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white'}`}>
@@ -478,6 +508,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
               <SelectItem value="oldest">Oldest First</SelectItem>
               <SelectItem value="priority">By Priority</SelectItem>
               <SelectItem value="status">By Status</SelectItem>
+              <SelectItem value="entry-asc">Entry Number (Ascending)</SelectItem>
+              <SelectItem value="entry-desc">Entry Number (Descending)</SelectItem>
             </SelectContent>
           </Select>
           <ToggleGroup type="single" value={viewMode} onValueChange={(value: 'list' | 'grid') => {
@@ -565,6 +597,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
               ...snagData,
               updatedAt: new Date(updatedSnag.updatedAt),
               createdAt: new Date(updatedSnag.createdAt),
+              observationDate: new Date(updatedSnag.observationDate),
               completionDate: updatedSnag.completionDate ? new Date(updatedSnag.completionDate) : undefined
             };
             await updateSnag(id, snagToUpdate);
@@ -771,6 +804,19 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
                   id="location"
                   value={editState.location}
                   onChange={(e) => setEditState((prev) => ({ ...prev, location: e.target.value }))}
+                  className={`${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white'}`}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="observationDate" className={isDarkMode ? 'text-gray-200' : 'text-gray-700'}>
+                  Observation Date
+                </Label>
+                <Input
+                  id="observationDate"
+                  type="date"
+                  value={editState.observationDate}
+                  onChange={(e) => setEditState((prev) => ({ ...prev, observationDate: e.target.value }))}
                   className={`${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white'}`}
                 />
               </div>
