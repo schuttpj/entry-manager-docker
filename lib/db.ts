@@ -1,25 +1,11 @@
-import { openDB, DBSchema, IDBPDatabase, IDBPTransaction } from 'idb';
-import { Annotation } from '../types/snag';
+import { openDB, DBSchema, IDBPDatabase } from 'idb';
 
-// Add connection status monitoring
-let dbInstance: IDBPDatabase<SnagListDB> | null = null;
-let connectionStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
-const connectionListeners: Set<(status: typeof connectionStatus) => void> = new Set();
+// Check if we're on the client side
+const isClient = typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined';
 
-export function addConnectionListener(listener: (status: typeof connectionStatus) => void) {
-  connectionListeners.add(listener);
-  // Immediately notify the listener of the current status
-  listener(connectionStatus);
-  return () => connectionListeners.delete(listener);
-}
-
-function updateConnectionStatus(newStatus: typeof connectionStatus) {
-  connectionStatus = newStatus;
-  connectionListeners.forEach(listener => listener(newStatus));
-}
-
-interface SnagListDB {
+interface SnagListDB extends DBSchema {
   snags: {
+    key: string;
     value: {
       id: string;
       projectName: string;
@@ -35,320 +21,170 @@ interface SnagListDB {
       updatedAt: Date;
       completionDate: Date | null;
       observationDate: Date;
-      annotations: Annotation[];
+      annotations: any[];
     };
-    indexes: { 'by-project': string };
+    indexes: {
+      'by-project': string;
+      'by-project-snagNumber': [string, number];
+    };
   };
   projects: {
+    key: string;
     value: {
+      id: string;
       name: string;
       createdAt: Date;
       updatedAt: Date;
     };
+    indexes: {
+      'by-name': string;
+    };
+  };
+  voiceRecordings: {
     key: string;
+    value: {
+      id: string;
+      projectName: string;
+      fileName: string;
+      audioBlob: Blob;
+      transcription?: string;
+      processed: boolean;
+      createdAt: Date;
+    };
+    indexes: {
+      'by-project': string;
+    };
   };
 }
 
-interface SnagUpdate {
-  description?: string;
-  priority?: 'Low' | 'Medium' | 'High';
-  assignedTo?: string;
-  status?: 'In Progress' | 'Completed';
-  location?: string;
-  completionDate?: string | Date | null;
-  observationDate?: Date;
-  createdAt?: Date;
-  updatedAt?: Date;
-  name?: string;
-}
-
-const DB_NAME = 'snag-list-db';
-const DB_VERSION = 11;
-
-export async function initDB(): Promise<IDBPDatabase<SnagListDB>> {
-  try {
-    const db = await openDB<SnagListDB>(DB_NAME, DB_VERSION, {
-      async upgrade(db, oldVersion, newVersion) {
-        // Create stores if they don't exist
-        if (!db.objectStoreNames.contains('snags')) {
-          const snagStore = db.createObjectStore('snags', { keyPath: 'id' });
-          snagStore.createIndex('by-project', 'projectName');
-        }
-        if (!db.objectStoreNames.contains('projects')) {
-          const projectStore = db.createObjectStore('projects', { keyPath: 'id' });
-          projectStore.createIndex('by-name', 'name', { unique: false });
-        }
-
-        // Version 7: Add name field to snags
-        if (oldVersion < 7) {
-          const store = db.transaction('snags', 'readwrite').objectStore('snags');
-          const snags = await store.getAll();
-          
-          for (const snag of snags) {
-            if (!snag.name) {
-              snag.name = snag.description ? snag.description.split(/\s+/).slice(0, 5).join(' ') : 'Untitled Entry';
-              await store.put(snag);
-            }
-          }
-        }
-
-        // Version 8: Update 'Open' status to 'In Progress'
-        if (oldVersion < 8) {
-          const store = db.transaction('snags', 'readwrite').objectStore('snags');
-          const snags = await store.getAll();
-          
-          for (const snag of snags) {
-            if (snag.status === 'Open') {
-              snag.status = 'In Progress';
-              snag.updatedAt = new Date();
-              await store.put(snag);
-            }
-          }
-        }
-
-        // Version 10: Add location field to snags
-        if (oldVersion < 10) {
-          const store = db.transaction('snags', 'readwrite').objectStore('snags');
-          const snags = await store.getAll();
-          
-          for (const snag of snags) {
-            if (!snag.location) {
-              snag.location = '';  // Initialize with empty string
-              snag.updatedAt = new Date();
-              await store.put(snag);
-            }
-          }
-        }
-
-        // Version 11: Ensure createdAt is properly handled as Date
-        if (oldVersion < 11) {
-          const tx = db.transaction('snags', 'readwrite');
-          const store = tx.objectStore('snags');
-          const snags = await store.getAll();
-          
-          for (const snag of snags) {
-            if (snag.createdAt) {
-              snag.createdAt = new Date(snag.createdAt);
-              await store.put(snag);
-            }
-          }
-          await tx.done;
-        }
-      },
-    });
-
-    updateConnectionStatus('connected');
-    return db;
-  } catch (error) {
-    console.error('Database initialization failed:', error);
-    updateConnectionStatus('error');
-    throw error;
-  }
-}
+let dbInstance: IDBPDatabase<SnagListDB> | null = null;
 
 export async function getDB(): Promise<IDBPDatabase<SnagListDB>> {
-  try {
-    return await initDB();
-  } catch (error) {
-    updateConnectionStatus('error');
-    throw error;
+  if (!isClient) {
+    console.error('❌ Attempted to access IndexedDB in server context');
+    throw new Error('IndexedDB is only available in browser context');
   }
-}
 
-// Helper function to get the next snag number for a project
-async function getNextSnagNumber(
-  tx: IDBPTransaction<SnagListDB, ['snags'], 'readwrite'>, 
-  projectName: string
-): Promise<number> {
-  try {
-    const store = tx.objectStore('snags');
-    const index = store.index('by-project');
-    const snags = await index.getAll(projectName);
-    const numbers = snags.map((snag: SnagListDB['snags']['value']) => snag.snagNumber || 0);
-    return numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
-  } catch (error) {
-    console.error('Error getting next snag number:', error);
-    throw error;
+  if (dbInstance) {
+    return dbInstance;
   }
-}
 
-// Helper function to generate AI name from description
-async function generateAIName(description: string): Promise<string> {
-  if (!description) return 'Untitled Entry';
-  
-  // Check for API key
-  const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    console.warn('OpenAI API key not found. Falling back to simple text extraction.');
-    return description.split(/\s+/).slice(0, 5).join(' ') || 'Untitled Entry';
-  }
-  
-  console.log('Attempting OpenAI API call for description:', description);
+  console.log('🔄 Initializing database connection...');
   
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are a helpful assistant that generates concise (5 words or less) titles from description text. The titles should be clear and descriptive."
-          },
-          {
-            role: "user",
-            content: `Generate a concise title from this description: "${description}"`
+    dbInstance = await openDB<SnagListDB>('snaglist-db', 2, {
+      async upgrade(db, oldVersion, newVersion) {
+        console.log('🔧 Running database upgrade...', { oldVersion, newVersion });
+        
+        // Delete old stores if they exist (to handle schema changes)
+        if (oldVersion > 0) {
+          if (db.objectStoreNames.contains('snags')) {
+            db.deleteObjectStore('snags');
           }
-        ],
-        max_tokens: 50,
-        temperature: 0.3
-      })
+        }
+        
+        // Create stores with new schema
+        if (!db.objectStoreNames.contains('snags')) {
+          console.log('📝 Creating snags store...');
+          const store = db.createObjectStore('snags', { keyPath: 'id' });
+          store.createIndex('by-project', 'projectName');
+          store.createIndex('by-project-snagNumber', ['projectName', 'snagNumber'], { unique: true });
+        }
+
+        if (!db.objectStoreNames.contains('projects')) {
+          console.log('📝 Creating projects store...');
+          const store = db.createObjectStore('projects', { keyPath: 'id' });
+          store.createIndex('by-name', 'name', { unique: false });
+        }
+
+        if (!db.objectStoreNames.contains('voiceRecordings')) {
+          console.log('📝 Creating voice recordings store...');
+          const store = db.createObjectStore('voiceRecordings', { keyPath: 'id' });
+          store.createIndex('by-project', 'projectName');
+        }
+
+        // Add sample data using the version change transaction
+        const projectId = crypto.randomUUID();
+        const now = new Date();
+
+        try {
+          const projectStore = db.transaction('projects', 'readwrite', { durability: 'relaxed' }).objectStore('projects');
+          await projectStore.add({
+            id: projectId,
+            name: 'james',
+            createdAt: now,
+            updatedAt: now
+          });
+
+          const snagStore = db.transaction('snags', 'readwrite', { durability: 'relaxed' }).objectStore('snags');
+          await snagStore.add({
+            id: crypto.randomUUID(),
+            projectName: 'james',
+            snagNumber: 1,
+            name: 'Kitchen Design',
+            description: 'A detailed sketch illustrates a modern kitchen featuring sleek cabinets, a central island, and integrated appliances',
+            photoPath: 'path/to/photo1.jpg',
+            priority: 'Medium' as const,
+            assignedTo: 'Alice Johnson',
+            status: 'In Progress' as const,
+            location: 'Kitchen',
+            createdAt: now,
+            updatedAt: now,
+            completionDate: null,
+            observationDate: now,
+            annotations: []
+          });
+        } catch (error) {
+          console.error('❌ Error adding sample data:', error);
+        }
+      },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenAI API error:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText
-      });
-      
-      if (response.status === 401) {
-        console.error('Invalid API key. Please check your OpenAI API key.');
-      } else if (response.status === 429) {
-        console.error('Rate limit exceeded. Please try again later.');
-      }
-      
-      return description.split(/\s+/).slice(0, 5).join(' ') || 'Untitled Entry';
-    }
-
-    const data = await response.json();
-    console.log('OpenAI API response:', {
-      success: true,
-      data: data.choices?.[0]?.message?.content,
-      fullResponse: data
+    console.log('✅ Database initialization complete', {
+      name: dbInstance.name,
+      version: dbInstance.version,
+      stores: dbInstance.objectStoreNames
     });
 
-    if (!data.choices?.[0]?.message?.content) {
-      console.error('Unexpected API response format:', data);
-      return description.split(/\s+/).slice(0, 5).join(' ') || 'Untitled Entry';
-    }
-
-    const generatedName = data.choices[0].message.content.trim();
-    console.log('Generated name from OpenAI:', generatedName);
-    return generatedName || 'Untitled Entry';
+    return dbInstance;
   } catch (error) {
-    console.error('Error generating AI name:', error);
-    if (error instanceof Error) {
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-    }
-    return description.split(/\s+/).slice(0, 5).join(' ') || 'Untitled Entry';
-  }
-}
-
-// Snag CRUD operations
-export async function addSnag(snag: Omit<SnagListDB['snags']['value'], 'id' | 'createdAt' | 'updatedAt' | 'snagNumber' | 'annotations' | 'name'>) {
-  const db = await getDB();
-  
-  try {
-    // Prepare all async data before starting the transaction
-    const id = crypto.randomUUID();
-    const now = new Date();
-    const name = await generateAIName(snag.description);
-    
-    console.log('Adding snag to database:', {
-      ...snag,
-      status: snag.status,
-      completionDate: snag.completionDate
-    });
-    
-    // Start a new transaction for getting the snag number and adding the snag
-    const tx = db.transaction('snags', 'readwrite');
-    try {
-      const store = tx.objectStore('snags');
-      const snagNumber = await getNextSnagNumber(tx, snag.projectName);
-      
-      const newSnag = {
-        ...snag,
-        id,
-        name,
-        snagNumber,
-        priority: snag.priority || 'Medium',
-        assignedTo: snag.assignedTo || '',
-        status: snag.status || 'In Progress',
-        location: snag.location || '',
-        completionDate: snag.completionDate || null,
-        observationDate: snag.observationDate || new Date(),
-        annotations: [],
-        createdAt: now,
-        updatedAt: now
-      };
-
-      console.log('Final snag object before storing:', {
-        id: newSnag.id,
-        status: newSnag.status,
-        completionDate: newSnag.completionDate
-      });
-
-      await store.add(newSnag);
-      await tx.done;
-      return id;
-    } catch (error) {
-      console.error('Transaction error:', error);
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error adding snag:', error);
+    console.error('❌ Database initialization error:', error);
     throw error;
   }
 }
 
-export async function getSnag(id: string) {
+// Project operations
+export async function addProject(name: string) {
   const db = await getDB();
-  const snag = await db.get('snags', id);
-  console.log('Retrieved snag:', { id, snag });
-  return snag;
-}
-
-export async function updateSnag(id: string, snag: Partial<Omit<SnagListDB['snags']['value'], 'id' | 'annotations'>>) {
-  const db = await getDB();
-  const existingSnag = await getSnag(id);
+  const id = crypto.randomUUID();
+  const now = new Date();
   
-  if (!existingSnag) {
-    throw new Error('Snag not found');
-  }
-
-  // If description is updated, regenerate the name unless it was manually edited
-  let name = existingSnag.name;
-  if (snag.description && snag.description !== existingSnag.description && !snag.name) {
-    name = await generateAIName(snag.description);
-  } else if (snag.name) {
-    name = snag.name; // Use manually edited name if provided
-  }
-  
-  await db.put('snags', {
-    ...existingSnag,
-    ...snag,
+  await db.add('projects', {
+    id,
     name,
-    createdAt: snag.createdAt ? new Date(snag.createdAt) : existingSnag.createdAt,
-    updatedAt: new Date(),
-    observationDate: snag.observationDate ? new Date(snag.observationDate) : existingSnag.observationDate
+    createdAt: now,
+    updatedAt: now,
   });
+  
+  return { id, name };
 }
 
-export async function deleteSnag(id: string) {
+export async function getAllProjects() {
   const db = await getDB();
-  await db.delete('snags', id);
+  return await db.getAll('projects');
 }
 
+export async function getProject(id: string) {
+  const db = await getDB();
+  return await db.get('projects', id);
+}
+
+export async function deleteProject(id: string) {
+  const db = await getDB();
+  await db.delete('projects', id);
+}
+
+// Snag operations
 export async function getAllSnags() {
   const db = await getDB();
   return await db.getAll('snags');
@@ -357,143 +193,89 @@ export async function getAllSnags() {
 export async function getSnagsByProject(projectName: string) {
   const db = await getDB();
   const index = db.transaction('snags').store.index('by-project');
-  const snags = await index.getAll(projectName);
-  console.log('Retrieved snags for project:', { projectName, snags });
-  return snags;
+  return await index.getAll(projectName);
 }
 
-// New annotation functions that work with the embedded annotations
-export async function addAnnotationToSnag(snagId: string, annotation: Omit<Annotation, 'id'>) {
-  const db = await getDB();
-  const snag = await getSnag(snagId);
-  
-  if (!snag) {
-    throw new Error('Snag not found');
-  }
-
-  const newAnnotation: Annotation = {
-    ...annotation,
-    id: crypto.randomUUID()
-  };
-  
-  await db.put('snags', {
-    ...snag,
-    annotations: [...(snag.annotations || []), newAnnotation],
-    updatedAt: new Date()
-  });
-
-  return newAnnotation;
-}
-
-export async function updateSnagAnnotations(snagId: string, annotations: Annotation[]): Promise<SnagListDB['snags']['value']> {
-  const db = await getDB();
-  const snag = await getSnag(snagId);
-  
-  if (!snag) {
-    throw new Error('Snag not found');
-  }
-  
-  // Ensure annotations is a valid array and each annotation has required fields
-  const validAnnotations = Array.isArray(annotations) ? annotations.map(ann => ({
-    id: ann.id || crypto.randomUUID(),
-    x: ann.x,
-    y: ann.y,
-    text: ann.text || '',
-    size: ann.size
-  })) : [];
-
-  console.log('Processing annotations for update:', {
-    snagId,
-    currentAnnotations: snag.annotations || [],
-    newAnnotations: validAnnotations
-  });
-
-  const updatedSnag = {
-    ...snag,
-    annotations: validAnnotations,
-    updatedAt: new Date()
-  };
-
-  console.log('Saving updated snag:', updatedSnag);
-  await db.put('snags', updatedSnag);
-  
-  // Verify the update and return the snag directly
-  const verifiedSnag = await getSnag(snagId);
-  if (!verifiedSnag) {
-    throw new Error('Failed to verify snag update');
-  }
-  console.log('Verified snag after update:', verifiedSnag);
-  
-  return verifiedSnag;
-}
-
-// Helper function to generate unique project name
-async function generateUniqueProjectName(db: IDBPDatabase<SnagListDB>, baseName: string): Promise<string> {
-  const index = db.transaction('projects').store.index('by-name');
-  let currentName = baseName;
-  let counter = 1;
-  
-  while (await index.get(currentName)) {
-    currentName = `${baseName} (${counter})`;
-    counter++;
-  }
-  
-  return currentName;
-}
-
-// Project CRUD operations
-export async function addProject(name: string) {
+export async function addSnag({
+  projectName,
+  name,
+  description,
+  photoPath,
+  priority,
+  assignedTo,
+  status,
+  location,
+  completionDate = null,
+  observationDate = new Date(),
+}: {
+  projectName: string;
+  name: string;
+  description: string;
+  photoPath: string;
+  priority: 'Low' | 'Medium' | 'High';
+  assignedTo: string;
+  status: 'In Progress' | 'Completed';
+  location: string;
+  completionDate?: Date | null;
+  observationDate?: Date;
+}) {
   const db = await getDB();
   const id = crypto.randomUUID();
   const now = new Date();
-  
-  // Generate a unique name if the provided name already exists
-  const uniqueName = await generateUniqueProjectName(db, name);
-  
-  await db.add('projects', {
+
+  // Get the highest snag number for this project and increment
+  const index = db.transaction('snags').store.index('by-project');
+  const snags = await index.getAll(projectName);
+  const maxSnagNumber = snags.reduce((max, snag) => Math.max(max, snag.snagNumber), 0);
+  const snagNumber = maxSnagNumber + 1;
+
+  const snag = {
     id,
-    name: uniqueName,
+    projectName,
+    snagNumber,
+    name,
+    description,
+    photoPath,
+    priority,
+    assignedTo,
+    status,
+    location,
     createdAt: now,
     updatedAt: now,
-  });
+    completionDate,
+    observationDate,
+    annotations: []
+  };
+
+  await db.add('snags', snag);
+  return snag;
+}
+
+export async function updateSnag(id: string, updates: Partial<Omit<SnagListDB['snags']['value'], 'id' | 'snagNumber'>>) {
+  const db = await getDB();
+  const snag = await db.get('snags', id);
   
-  return { id, name: uniqueName };
-}
-
-export async function getProject(id: string) {
-  const db = await getDB();
-  return await db.get('projects', id);
-}
-
-export async function getProjectByName(name: string) {
-  const db = await getDB();
-  const index = db.transaction('projects').store.index('by-name');
-  return await index.get(name);
-}
-
-export async function getAllProjects() {
-  const db = await getDB();
-  return await db.getAll('projects');
-}
-
-export async function deleteProject(id: string) {
-  const db = await getDB();
-  
-  // Get project name first
-  const project = await getProject(id);
-  if (!project) return;
-  
-  // Delete all snags in the project
-  const snags = await getSnagsByProject(project.name);
-  for (const snag of snags) {
-    await deleteSnag(snag.id);
+  if (!snag) {
+    throw new Error('Snag not found');
   }
   
-  // Delete the project
-  await db.delete('projects', id);
+  const updatedSnag = {
+    ...snag,
+    ...updates,
+    updatedAt: new Date(),
+    completionDate: updates.status === 'Completed' ? new Date() : snag.completionDate
+  };
+  
+  await db.put('snags', updatedSnag);
+  return updatedSnag;
 }
 
-// Add new functions for voice recordings
+export async function deleteSnag(id: string) {
+  const db = await getDB();
+  await db.delete('snags', id);
+}
+
+// Voice recording operations
 export async function saveVoiceRecording(
   projectName: string,
   fileName: string,
@@ -527,17 +309,116 @@ export async function getVoiceRecordingsByProject(projectName: string) {
   return await index.getAll(projectName);
 }
 
-export async function updateVoiceRecordingTranscription(id: string, transcription: string) {
+// Snag annotation operations
+export async function updateSnagAnnotations(snagId: string, annotations: any[]) {
   const db = await getDB();
-  const recording = await getVoiceRecording(id);
+  const snag = await db.get('snags', snagId);
   
-  if (!recording) {
-    throw new Error('Voice recording not found');
+  if (!snag) {
+    throw new Error('Snag not found');
   }
   
-  await db.put('voiceRecordings', {
-    ...recording,
-    transcription,
-    processed: true,
+  const updatedSnag = {
+    ...snag,
+    annotations,
+    updatedAt: new Date()
+  };
+  
+  await db.put('snags', updatedSnag);
+  return updatedSnag;
+}
+
+// Chat-specific query functions
+export async function getSnagContext(query: string) {
+  const db = await getDB();
+  
+  // Extract project name if mentioned
+  const projectMatch = query.match(/project\s+["']?([^"']+)["']?/i);
+  const projectName = projectMatch ? projectMatch[1] : null;
+  
+  // Extract snag number if mentioned
+  const snagMatch = query.match(/(?:snag|entry)\s*#?\s*(\d+)/i);
+  const snagNumber = snagMatch ? parseInt(snagMatch[1]) : null;
+  
+  let context = {
+    snag: null as any,
+    project: null as any,
+    relatedSnags: [] as any[],
+    totalSnags: 0,
+    availableProjects: [] as string[]
+  };
+
+  try {
+    // Get all projects for context
+    const projects = await getAllProjects();
+    context.availableProjects = projects.map(p => p.name);
+
+    // If no project specified but snag number is, search in all projects
+    if (snagNumber && !projectName) {
+      const allSnags = await getAllSnags();
+      context.snag = allSnags.find(s => s.snagNumber === snagNumber);
+      if (context.snag) {
+        const projectSnags = await getSnagsByProject(context.snag.projectName);
+        context.relatedSnags = projectSnags.filter(s => 
+          s.snagNumber !== snagNumber && 
+          (s.location === context.snag.location || s.status === context.snag.status)
+        );
+        context.totalSnags = projectSnags.length;
+      }
+    } else if (projectName) {
+      // Get snags for specific project
+      const projectSnags = await getSnagsByProject(projectName);
+      context.totalSnags = projectSnags.length;
+      
+      if (snagNumber) {
+        context.snag = projectSnags.find(s => s.snagNumber === snagNumber);
+        if (context.snag) {
+          // Get related snags (same location or status)
+          context.relatedSnags = projectSnags.filter(s => 
+            s.snagNumber !== snagNumber && 
+            (s.location === context.snag.location || s.status === context.snag.status)
+          );
+        }
+      } else {
+        // Return summary of project snags
+        const statusCounts = projectSnags.reduce((acc, s) => {
+          acc[s.status] = (acc[s.status] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        
+        context.project = {
+          name: projectName,
+          totalSnags: projectSnags.length,
+          statusCounts,
+          locations: [...new Set(projectSnags.map(s => s.location))]
+        };
+      }
+    }
+    
+    return context;
+  } catch (error) {
+    console.error('Error getting snag context:', error);
+    throw error;
+  }
+}
+
+export async function searchSnags(query: string) {
+  const db = await getDB();
+  const allSnags = await getAllSnags();
+  
+  // Search in description, name, location, and assignedTo fields
+  const searchTerms = query.toLowerCase().split(/\s+/);
+  
+  return allSnags.filter(snag => {
+    const searchableText = `
+      ${snag.description} 
+      ${snag.name} 
+      ${snag.location} 
+      ${snag.assignedTo}
+      ${snag.priority}
+      ${snag.status}
+    `.toLowerCase();
+    
+    return searchTerms.every(term => searchableText.includes(term));
   });
 } 

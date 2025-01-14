@@ -6,6 +6,7 @@ import { UploadArea } from "@/components/UploadArea"
 import { SnagList } from "@/components/SnagList"
 import { NewProjectDialog } from "@/components/NewProjectDialog"
 import { AIVoiceAssistant } from "@/components/AIVoiceAssistant"
+import { ChatButton } from "@/components/ChatButton"
 import { addProject } from "@/lib/db"
 
 export default function Home() {
@@ -82,6 +83,9 @@ export default function Home() {
         onSubmit={handleNewProject}
         isDarkMode={isDarkMode}
       />
+
+      {/* Chat Button */}
+      <ChatButton isDarkMode={isDarkMode} />
     </main>
   );
 }

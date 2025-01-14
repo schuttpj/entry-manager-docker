@@ -23,6 +23,7 @@ interface BatchFields {
 interface Preview {
   file: File;
   preview: string;
+  name: string;
   description: string;
   priority?: 'Low' | 'Medium' | 'High';
   assignedTo?: string;
@@ -160,6 +161,33 @@ export function UploadArea({
     });
   };
 
+  const generateName = async (file: File, projectName: string): Promise<string> => {
+    try {
+      const reader = new FileReader();
+      const imageData = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const response = await fetch('/api/generate-name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageData, projectName })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate name');
+      }
+
+      const { name } = await response.json();
+      return name;
+    } catch (error) {
+      console.error('Error generating name:', error);
+      return 'Untitled Entry';
+    }
+  };
+
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     // Filter out text files and image files
     const textFiles = acceptedFiles.filter(file => file.type === 'text/plain');
@@ -176,16 +204,20 @@ export function UploadArea({
       setDescriptionFile(textFiles[0]); // Show the first file name for UI purposes
       
       // Match images with descriptions based on filename (case-insensitive)
-      const newPreviews = imageFiles.map(file => {
+      const newPreviews = await Promise.all(imageFiles.map(async file => {
         const baseFileName = file.name.toLowerCase().replace(/\.[^/.]+$/, "");
         const fields = descriptionsMap[baseFileName] || { description: '' };
-        console.log('Creating preview for file:', baseFileName);
-        console.log('Fields from description:', fields);
-        console.log('Completion date for preview:', fields.completionDate);
+        
+        // Generate name if no description is provided
+        if (!fields.description) {
+          const generatedName = await generateName(file, projectName);
+          fields.description = generatedName;
+        }
         
         return {
           file,
           preview: URL.createObjectURL(file),
+          name: fields.description,
           description: fields.description,
           priority: fields.priority,
           assignedTo: fields.assignedTo,
@@ -194,19 +226,23 @@ export function UploadArea({
           completionDate: fields.completionDate,
           observationDate: fields.observationDate
         };
-      });
+      }));
 
       setPreviews(prev => [...prev, ...newPreviews]);
     } else {
-      // Handle only image files
-      const newPreviews = imageFiles.map(file => ({
-        file,
-        preview: URL.createObjectURL(file),
-        description: ''
+      // Handle only image files - generate names for all
+      const newPreviews = await Promise.all(imageFiles.map(async file => {
+        const generatedName = await generateName(file, projectName);
+        return {
+          file,
+          preview: URL.createObjectURL(file),
+          name: generatedName,
+          description: generatedName
+        };
       }));
       setPreviews(prev => [...prev, ...newPreviews]);
     }
-  }, []);
+  }, [projectName]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -251,6 +287,7 @@ export function UploadArea({
                 
                 await addSnag({
                   projectName,
+                  name: preview.name,
                   description: preview.description,
                   photoPath: compressedImage,
                   priority,
