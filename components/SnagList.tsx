@@ -172,7 +172,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
         case 'priority':
           return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
         case 'status':
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+          if (a.status === b.status) return 0;
+          return a.status === 'Completed' ? 1 : -1;
         case 'entry-asc':
           return a.snagNumber - b.snagNumber;
         case 'entry-desc':
@@ -532,11 +533,11 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
           {selectedSnags.size > 0 && (
             <>
               <PDFExport 
-                snags={snags.filter(snag => selectedSnags.has(snag.id))}
+                snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))}
                 projectName={projectName}
               />
               <PDFExportList
-                snags={snags.filter(snag => selectedSnags.has(snag.id))}
+                snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))}
                 projectName={projectName}
                 onClose={() => setSelectedSnags(new Set())}
                 isDarkMode={isDarkMode}

@@ -120,19 +120,27 @@ const addCompletedWatermark = (
   
   // Add completion date if available - positioned below the main text
   if (completionDate) {
-    doc.setFontSize(fontSize * 0.35); // Increased font size for date
-    doc.setFont(undefined, 'bold'); // Made date bold
-    const dateText = format(new Date(completionDate), 'MMM d, yyyy');
-    
-    doc.text(
-      dateText,
-      centerX,
-      centerY + (dateOffset / 2),
-      {
-        align: 'center',
-        angle: -30
+    try {
+      const date = new Date(completionDate);
+      // Check if date is valid
+      if (!isNaN(date.getTime())) {
+        doc.setFontSize(fontSize * 0.35); // Increased font size for date
+        doc.setFont(undefined, 'bold'); // Made date bold
+        const dateText = format(date, 'MMM d, yyyy');
+        
+        doc.text(
+          dateText,
+          centerX,
+          centerY + (dateOffset / 2),
+          {
+            align: 'center',
+            angle: -30
+          }
+        );
       }
-    );
+    } catch (error) {
+      console.warn('Error formatting completion date:', error);
+    }
   }
 };
 
@@ -279,36 +287,64 @@ export function PDFExport({ snags, projectName }: PDFExportProps) {
             doc.text('Annotations:', margin, yPosition);
             yPosition += 6;
             
-            doc.setFontSize(10);
+            // Calculate remaining space on page
+            const remainingSpace = pageHeight - margin - yPosition;
+            // Calculate space needed per annotation (including padding)
+            const spacePerAnnotation = remainingSpace / snag.annotations.length;
+            
+            // Start with normal font size and reduce if needed
+            let fontSize = 10;
+            let lineSpacing = 5;
+            
+            // If space is tight, adjust font size and spacing
+            if (spacePerAnnotation < 8) {
+              fontSize = Math.max(6, spacePerAnnotation * 0.8);
+              lineSpacing = Math.max(3, spacePerAnnotation * 0.4);
+            }
+            
+            doc.setFontSize(fontSize);
             doc.setTextColor(60, 60, 60);
+            
             snag.annotations.forEach((annotation, index) => {
               // Skip if annotation text is empty or undefined
               if (!annotation?.text?.trim()) return;
               
               // Format annotation text with number and content
               const annotationText = `${index + 1}. ${annotation.text}`;
-              const splitAnnotation = doc.splitTextToSize(annotationText, contentWidth - 10);
               
-              // Check if we need a new page for this annotation
-              if (yPosition + (splitAnnotation.length * 5) > pageHeight - margin) {
-                doc.addPage();
-                yPosition = margin + 10;
+              // Calculate max width based on content width and current position
+              const maxWidth = contentWidth - 10;
+              const splitAnnotation = doc.splitTextToSize(annotationText, maxWidth);
+              
+              // Calculate total height needed for this annotation
+              const annotationHeight = splitAnnotation.length * lineSpacing;
+              
+              // If this annotation would go beyond page bounds, reduce font size further
+              if (yPosition + annotationHeight > pageHeight - margin) {
+                const remainingHeight = pageHeight - margin - yPosition;
+                const newFontSize = Math.max(6, fontSize * (remainingHeight / annotationHeight));
+                fontSize = newFontSize;
+                lineSpacing = Math.max(3, newFontSize * 0.4);
+                doc.setFontSize(fontSize);
+                // Recalculate split text with new font size
+                const newSplitAnnotation = doc.splitTextToSize(annotationText, maxWidth);
+                doc.text(newSplitAnnotation, margin, yPosition);
+                yPosition += newSplitAnnotation.length * lineSpacing;
+              } else {
+                doc.text(splitAnnotation, margin, yPosition);
+                yPosition += splitAnnotation.length * lineSpacing;
               }
-              
-              // Add the annotation text
-              doc.text(splitAnnotation, margin, yPosition);
-              yPosition += (splitAnnotation.length * 5) + 3;
             });
             
-            // Add extra space after annotations
-            yPosition += 5;
+            // Add minimal space after annotations
+            yPosition += 3;
           }
           
           // Add a divider line between snags
-          yPosition += 10;
+          yPosition += 5;
           doc.setDrawColor(200, 200, 200);
           doc.line(margin, yPosition - 5, pageWidth - margin, yPosition - 5);
-          yPosition += 15;
+          yPosition += 10;
           
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';

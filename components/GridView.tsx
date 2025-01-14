@@ -83,22 +83,67 @@ function AnnotationPin({ number, x, y, text, isActive, onClick, isDarkMode, isTe
 }
 
 function DetailsCard({ snag, onClose, onEdit, isDarkMode, position }: DetailsCardProps) {
+  const [dragPosition, setDragPosition] = useState(position);
+  const dragRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (dragRef.current) {
+      isDraggingRef.current = true;
+      dragStartRef.current = {
+        x: e.clientX - dragPosition.x,
+        y: e.clientY - dragPosition.y
+      };
+      
+      const handleMouseMove = (e: MouseEvent) => {
+        if (isDraggingRef.current) {
+          setDragPosition({
+            x: e.clientX - dragStartRef.current.x,
+            y: e.clientY - dragStartRef.current.y
+          });
+        }
+      };
+      
+      const handleMouseUp = () => {
+        isDraggingRef.current = false;
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+      
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+  };
+
   return (
     <div 
-      className={`fixed z-70 w-80 ${
+      className={`fixed z-[200] w-80 ${
         isDarkMode ? 'bg-gray-800' : 'bg-white'
       } rounded-lg shadow-xl border ${
         isDarkMode ? 'border-gray-700' : 'border-gray-200'
       } transform transition-all duration-200 ease-out animate-in fade-in slide-in-from-top-2`}
       style={{
-        top: `${position.y}px`,
-        left: `${position.x}px`,
+        top: `${dragPosition.y}px`,
+        left: `${dragPosition.x}px`,
+        willChange: 'transform',
       }}
     >
       <div className="p-4">
-        <div className="flex justify-between items-start mb-3">
+        <div 
+          ref={dragRef}
+          className="flex justify-between items-start mb-3 cursor-grab active:cursor-grabbing"
+          onMouseDown={handleMouseDown}
+        >
           <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-            {snag.name || 'Untitled Entry'}
+            <span className={`inline-flex items-center gap-2`}>
+              <span className={`px-2 py-0.5 rounded-full text-sm ${
+                isDarkMode ? 'bg-gray-700' : 'bg-gray-100'
+              }`}>
+                #{snag.snagNumber}
+              </span>
+              {snag.name || 'Untitled Entry'}
+            </span>
           </h3>
           <div className="flex items-center gap-2">
             <button
@@ -734,9 +779,19 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
       {/* Header */}
       <div className={`fixed top-0 left-0 right-0 h-16 ${isDarkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg flex items-center justify-between px-6 z-10`}>
         <div className="flex items-center gap-6 flex-1">
-          <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-            Grid View
-          </h2>
+          <div className="flex items-center gap-2 shrink-0">
+            <h2 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+              Grid View
+            </h2>
+            <span className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+              - Viewing entries for project:
+            </span>
+            <span className={`text-sm font-medium px-2 py-0.5 rounded ${
+              isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-700'
+            }`}>
+              {snags[0]?.projectName || 'Untitled Project'}
+            </span>
+          </div>
           <div className="relative max-w-md flex-1">
             <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`} />
             <input

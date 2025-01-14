@@ -10,6 +10,8 @@ interface PDFExportListProps {
   projectName: string;
   isDarkMode?: boolean;
   onClose: () => void;
+  sortOrder?: 'asc' | 'desc';
+  sortField?: string;
 }
 
 const compressImage = async (imageUrl: string, maxWidth = 800): Promise<string> => {
@@ -51,6 +53,21 @@ const compressImage = async (imageUrl: string, maxWidth = 800): Promise<string> 
   });
 };
 
+const formatDateSafely = (dateValue: string | Date | null | undefined, dateFormat: string = 'MM/dd/yy'): string => {
+  if (!dateValue) return '';
+  try {
+    const date = new Date(dateValue);
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    return format(date, dateFormat);
+  } catch (error) {
+    console.warn('Error formatting date:', error);
+    return '';
+  }
+};
+
 // Add watermark for completed snags
 const addCompletedWatermark = (
   doc: jsPDF,
@@ -71,26 +88,25 @@ const addCompletedWatermark = (
   doc.setTextColor(34, 197, 94); // Green color (text-green-600) without opacity
   
   const completedText = "COMPLETED";
-  const dateOffset = completionDate ? fontSize * 0.8 : 0;
   doc.text(
     completedText,
     centerX,
-    centerY - (dateOffset / 2),
+    centerY,
     {
       align: 'center',
       angle: -30
     }
   );
   
-  if (completionDate) {
+  // Only add date if it's valid
+  const dateText = formatDateSafely(completionDate, 'MMM d, yyyy');
+  if (dateText) {
     doc.setFontSize(fontSize * 0.35);
     doc.setFont(undefined, 'bold');
-    const dateText = format(new Date(completionDate), 'MMM d, yyyy');
-    
     doc.text(
       dateText,
       centerX,
-      centerY + (dateOffset / 2),
+      centerY + (fontSize * 0.4),
       {
         align: 'center',
         angle: -30
@@ -131,7 +147,14 @@ const drawAnnotationPins = (
   });
 };
 
-export default function PDFExportList({ snags, projectName, isDarkMode = false, onClose }: PDFExportListProps) {
+export default function PDFExportList({ 
+  snags, 
+  projectName, 
+  isDarkMode = false, 
+  onClose,
+  sortOrder = 'asc',
+  sortField = 'snagNumber' 
+}: PDFExportListProps) {
   const handleExport = async () => {
     if (!snags?.length) {
       alert('Please select at least one snag to export.');
@@ -139,6 +162,10 @@ export default function PDFExportList({ snags, projectName, isDarkMode = false, 
     }
 
     try {
+      // Use the snags array directly as it's already sorted in the UI
+      // Remove the sorting logic here since snags should already be in the correct order
+      const sortedSnags = snags;
+
       // Initialize PDF in portrait mode (A4)
       const doc = new jsPDF({
         orientation: "portrait",
@@ -150,7 +177,22 @@ export default function PDFExportList({ snags, projectName, isDarkMode = false, 
       const pageWidth = 210;
       const pageHeight = 297;
       const margin = 15;
-      const contentWidth = pageWidth - (2 * margin);
+      
+      // Define column widths for portrait layout
+      const colWidths = {
+        nr: 25,         // Keep for annotations
+        photo: 45,      // Slightly reduced
+        details: 60,    // Slightly reduced
+        dates: 15,      // Keep
+        status: 15,     // Keep
+        assigned: 20    // Reduced
+      };
+
+      // Calculate total width to ensure it matches content width
+      const totalWidth = Object.values(colWidths).reduce((sum, width) => sum + width, 0);
+      // Verify we have enough margin space
+      console.assert(totalWidth + (2 * margin) <= pageWidth, 'Content width exceeds page width');
+      const contentWidth = totalWidth;
       
       // Add project title and metadata
       doc.setFontSize(24);
@@ -171,23 +213,14 @@ export default function PDFExportList({ snags, projectName, isDarkMode = false, 
       
       // Draw header line
       doc.setDrawColor(200, 200, 200);
-      doc.line(margin, margin + 25, pageWidth - margin, margin + 25);
-
-      // Define column widths for portrait layout
-      const colWidths = {
-        nr: 15,         // Keep for bold numbers
-        photo: 45,      // Keep for good photo size
-        details: 45,    // Keep
-        dates: 20,      // Keep
-        status: 20,     // Keep
-        assigned: 35    // Keep
-      };
+      doc.line(margin, margin + 25, margin + contentWidth, margin + 25);
 
       // Define standard font sizes
       const fontSizes = {
-        heading: 10,    // Header font size
-        body: 8,        // Body text font size (2 points smaller)
-        small: 7        // Small text (for annotations)
+        heading: 12,    // Increased from 10 for better readability
+        body: 10,       // Increased from 8 for better readability
+        small: 9,       // Increased from 7 for better readability
+        tiny: 8         // Increased from 6 for better readability
       };
 
       // Draw box around content with spacing
@@ -209,7 +242,7 @@ export default function PDFExportList({ snags, projectName, isDarkMode = false, 
       const headers = ['Nr', 'Photo', 'Details', 'Dates', 'Status', 'Assigned'];
       
       const drawTableHeader = (startY: number) => {
-        // Header background
+        // Header background - use calculated content width
         doc.setFillColor(245, 245, 245);
         doc.rect(margin, startY - 5, contentWidth, 8, 'F');
         
@@ -220,7 +253,7 @@ export default function PDFExportList({ snags, projectName, isDarkMode = false, 
         
         headers.forEach((header, index) => {
           const colWidth = Object.values(colWidths)[index];
-          const alignment = ['Nr', 'Status', 'Dates', 'Assigned'].includes(header) ? 'center' : 'left';
+          const alignment = ['Status', 'Dates', 'Assigned'].includes(header) ? 'center' : 'left';
           const xOffset = alignment === 'center' ? colWidth / 2 : 3;
           doc.text(header, xPos + xOffset, startY - 1, { align: alignment });
           xPos += colWidth;
@@ -232,9 +265,9 @@ export default function PDFExportList({ snags, projectName, isDarkMode = false, 
       // Initial header
       yPosition = drawTableHeader(margin + 35);
 
-      // Add rows
-      for (let i = 0; i < snags.length; i++) {
-        const snag = snags[i];
+      // Add rows - using sortedSnags which maintains UI order
+      for (let i = 0; i < sortedSnags.length; i++) {
+        const snag = sortedSnags[i];
         const baseRowHeight = 40;
         let rowHeight = baseRowHeight;
         let photoWidth = colWidths.photo;
@@ -272,19 +305,28 @@ export default function PDFExportList({ snags, projectName, isDarkMode = false, 
           drawContentBox(yPosition, rowHeight, snag.status === 'Completed');
 
           if (snag.status === 'Completed') {
-            // Add large "Completed" watermark
+            // Add large "Completed" watermark - adjust position to match new width
             const watermarkFontSize = 20;
             doc.setFontSize(watermarkFontSize);
             doc.setFont(undefined, 'bold');
             doc.setTextColor(34, 197, 94);
             
-            const watermarkX = margin + contentWidth - 5;
-            const watermarkY = yPosition + (rowHeight / 2) + 2;
+            const watermarkX = margin + contentWidth;
+            const watermarkY = yPosition + (rowHeight / 2);
             
             doc.text("COMPLETED", watermarkX, watermarkY, { 
               align: 'right',
               baseline: 'middle'
             });
+            
+            const dateText = formatDateSafely(snag.completionDate);
+            if (dateText) {
+              doc.setFontSize(watermarkFontSize * 0.6);
+              doc.text(dateText, watermarkX, watermarkY, {
+                align: 'right',
+                baseline: 'middle'
+              });
+            }
             
             doc.setTextColor(0, 0, 0);
           }
@@ -294,22 +336,42 @@ export default function PDFExportList({ snags, projectName, isDarkMode = false, 
           doc.setFontSize(9);
           doc.setTextColor(0, 0, 0);
 
-          // Snag number - center aligned with bold and larger font
+          // Snag number - left aligned with # prefix
           doc.setFont(undefined, 'bold');
-          doc.setFontSize(fontSizes.heading);
-          doc.text(snag.snagNumber.toString(), xPosition + (colWidths.nr / 2), yPosition, { align: 'center' });
+          doc.setFontSize(fontSizes.body);  // Changed from heading to body size
+          doc.text(`#${snag.snagNumber}`, xPosition + 3, yPosition);
+
+          // Add annotations under the number in the first column
+          if (snag.annotations?.length) {
+            doc.setFontSize(fontSizes.small);  // Changed from tiny to small
+            doc.setFont(undefined, 'normal');
+            doc.setTextColor(100, 100, 100);
+            
+            let annotY = yPosition + 6;
+            
+            // Add "Annotations" label
+            doc.setFont(undefined, 'bold');
+            doc.text("Annotations", xPosition + 3, annotY);
+            annotY += 4;
+
+            // List annotations more compactly
+            doc.setFont(undefined, 'normal');
+            snag.annotations.forEach((ann, idx) => {
+              const annotText = doc.splitTextToSize(
+                `${idx + 1}. ${ann.text}`,
+                colWidths.nr - 5
+              );
+              doc.text(annotText, xPosition + 3, annotY);
+              annotY += annotText.length * 3;  // Increased from 2.5 for better spacing
+            });
+          }
           xPosition += colWidths.nr;
 
-          // Name - left aligned with photo
-          doc.setFontSize(fontSizes.heading);
-          doc.setFont(undefined, 'bold');
-          doc.text(snag.name || 'Untitled Entry', xPosition + 3, yPosition);
-
-          // Photo with annotations
+          // Photo section - adjusted for new width
           if (photoBase64) {
             // Calculate maximum possible dimensions while maintaining aspect ratio
-            const maxPhotoWidth = colWidths.photo - 6;  // 3mm padding on each side
-            const maxPhotoHeight = rowHeight - 4;       // 2mm padding top and bottom
+            const maxPhotoWidth = colWidths.photo - 4;  // 2mm padding each side
+            const maxPhotoHeight = rowHeight - 4;       // 2mm padding top/bottom
             
             let imgWidth = maxPhotoWidth;
             let imgHeight = imgWidth / imgAspectRatio;
@@ -319,8 +381,8 @@ export default function PDFExportList({ snags, projectName, isDarkMode = false, 
               imgWidth = imgHeight * imgAspectRatio;
             }
 
-            // Left align with header (3mm from column start)
-            const xOffset = xPosition + 3;
+            // Center the photo in its column
+            const xOffset = xPosition + (colWidths.photo - imgWidth) / 2;
             const yOffset = yPosition + 2;
             
             doc.addImage(
@@ -339,7 +401,7 @@ export default function PDFExportList({ snags, projectName, isDarkMode = false, 
                 yOffset,
                 imgWidth,
                 imgHeight,
-                snag.completionDate
+                snag.completionDate ? formatDateSafely(snag.completionDate) : null
               );
             }
 
@@ -356,64 +418,38 @@ export default function PDFExportList({ snags, projectName, isDarkMode = false, 
           }
           xPosition += colWidths.photo;
 
-          // Details section with standardized font sizes (without name since it's moved)
-          doc.setFontSize(fontSizes.body);
+          // Details section - adjusted for new width
+          doc.setFontSize(fontSizes.body);  // Using body size consistently
           doc.setFont(undefined, 'normal');
-          doc.text(`Location: ${snag.location || 'No location'}`, xPosition + 3, yPosition + 6);
+          doc.setTextColor(0, 0, 0);
+          doc.text(`Location: ${snag.location || 'No location'}`, xPosition + 3, yPosition + 5);
           
           const description = doc.splitTextToSize(snag.description || 'No description', colWidths.details - 6);
-          doc.text(description, xPosition + 3, yPosition + 11);
-          
-          // Annotations with smaller font
-          if (snag.annotations?.length) {
-            let annotationY = yPosition + 16 + (description.length * 4);
-            doc.setFontSize(fontSizes.small);
-            doc.setTextColor(100, 100, 100);
-            snag.annotations.forEach((ann, idx) => {
-              const annotText = doc.splitTextToSize(`${idx + 1}. ${ann.text}`, colWidths.details - 10);
-              doc.text(annotText, xPosition + 5, annotationY);
-              annotationY += annotText.length * 3;
-            });
-          }
+          doc.text(description, xPosition + 3, yPosition + 10);
           xPosition += colWidths.details;
 
-          // Dates - center aligned
-          doc.setFontSize(fontSizes.body);
-          doc.setTextColor(0, 0, 0);
-          const createdDate = format(new Date(snag.createdAt), 'MM/dd/yy');
-          doc.text(createdDate, xPosition + (colWidths.dates / 2), yPosition, { align: 'center' });
-          
-          if (snag.completionDate) {
-            const completionDate = format(new Date(snag.completionDate), 'MM/dd/yy');
-            doc.text(completionDate, xPosition + (colWidths.dates / 2), yPosition + 5, { align: 'center' });
-          }
+          // Dates - more readable
+          doc.setFontSize(fontSizes.small);  // Changed from tiny to small
+          const createdDate = formatDateSafely(snag.createdAt);
+          doc.text(createdDate, xPosition + (colWidths.dates / 2), yPosition + 4, { align: 'center' });
           xPosition += colWidths.dates;
 
-          // Status - center aligned with color
-          doc.setFontSize(fontSizes.body);
+          // Status - more readable
           const statusColor = snag.status === 'Completed' ? [34, 197, 94] : [255, 140, 0];
           doc.setTextColor(statusColor[0], statusColor[1], statusColor[2]);
           doc.setFont(undefined, 'bold');
-          doc.text(snag.status, xPosition + (colWidths.status / 2), yPosition, { align: 'center' });
-          
-          // Add completion date under status if completed
-          if (snag.status === 'Completed' && snag.completionDate) {
-            doc.setFontSize(fontSizes.small);
-            doc.setFont(undefined, 'normal');
-            doc.setTextColor(34, 197, 94);
-            const statusCompletionDate = format(new Date(snag.completionDate), 'MM/dd/yy');
-            doc.text(statusCompletionDate, xPosition + (colWidths.status / 2), yPosition + 4, { align: 'center' });
-          }
+          doc.setFontSize(fontSizes.small);  // Using small size for status
+          doc.text(snag.status, xPosition + (colWidths.status / 2), yPosition + 4, { align: 'center' });
           xPosition += colWidths.status;
 
-          // Assigned To - center aligned with smaller font if needed
-          doc.setFontSize(fontSizes.body);
+          // Assigned To - more readable
+          doc.setFontSize(fontSizes.small);  // Consistent small size
           doc.setFont(undefined, 'normal');
           doc.setTextColor(0, 0, 0);
           const assignedText = snag.assignedTo || 'Unassigned';
-          doc.text(assignedText, xPosition + (colWidths.assigned / 2), yPosition, { 
+          doc.text(assignedText, xPosition + (colWidths.assigned / 2), yPosition + 4, { 
             align: 'center',
-            maxWidth: colWidths.assigned - 6
+            maxWidth: colWidths.assigned - 2
           });
 
           // Adjust spacing between boxes
