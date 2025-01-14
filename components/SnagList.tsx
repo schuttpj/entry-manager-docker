@@ -38,6 +38,7 @@ interface EditState {
   name: string;
   location: string;
   observationDate: string;
+  completionDate: Date | null;
 }
 
 interface SnagListProps {
@@ -64,7 +65,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
     status: 'In Progress',
     name: '',
     location: '',
-    observationDate: format(new Date(), 'yyyy-MM-dd')
+    observationDate: format(new Date(), 'yyyy-MM-dd'),
+    completionDate: null
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -215,7 +217,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
       status: snag.status,
       name: snag.name || '',
       location: snag.location || '',
-      observationDate: snag.observationDate ? format(new Date(snag.observationDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
+      observationDate: snag.observationDate ? format(new Date(snag.observationDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+      completionDate: snag.completionDate ? new Date(snag.completionDate) : null
     });
   };
 
@@ -228,7 +231,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
       status: 'In Progress',
       name: '',
       location: '',
-      observationDate: format(new Date(), 'yyyy-MM-dd')
+      observationDate: format(new Date(), 'yyyy-MM-dd'),
+      completionDate: null
     });
   };
 
@@ -246,6 +250,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
             ...s, 
             ...editState, 
             observationDate: observationDate,
+            completionDate: editState.status === 'Completed' ? editState.completionDate : null,
             updatedAt: new Date() 
           } 
         : s
@@ -261,7 +266,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
         status: editState.status,
         name: editState.name,
         location: editState.location,
-        observationDate: observationDate
+        observationDate: observationDate,
+        completionDate: editState.status === 'Completed' ? editState.completionDate : null
       };
 
       await updateSnag(snag.id, updateData);
@@ -414,10 +420,16 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
       return;
     }
 
+    const date = new Date(completionDate);
+    if (isNaN(date.getTime())) {
+      console.error('Invalid completion date');
+      return;
+    }
+
     setEditState(prev => ({
       ...prev,
       status: 'Completed',
-      completionDate: new Date(completionDate)
+      completionDate: date
     }));
     setCompletionDateDialogOpen(false);
     setCompletionDate('');

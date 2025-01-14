@@ -47,6 +47,23 @@ export function SnagListItem({
     }
   }, [snag.observationDate]);
 
+  const formattedCompletionDate = React.useMemo(() => {
+    if (!snag.completionDate) return null;
+    try {
+      // Ensure we're working with a Date object
+      const date = new Date(snag.completionDate);
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid completion date:', snag.completionDate);
+        return null;
+      }
+      return formatDate(date);
+    } catch (error) {
+      console.error('Error formatting completion date:', error);
+      return null;
+    }
+  }, [snag.completionDate]);
+
   const priorityColors = getPriorityColor(snag.priority);
 
   return (
@@ -55,9 +72,9 @@ export function SnagListItem({
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="transform rotate-[-30deg] text-green-600/20 dark:text-green-500/20 flex flex-col items-center select-none">
             <span className="text-[72px] font-bold tracking-wider">COMPLETED</span>
-            {snag.completionDate && (
+            {formattedCompletionDate && (
               <span className="text-[18px] font-medium -mt-4">
-                {formatDate(snag.completionDate)}
+                {formattedCompletionDate}
               </span>
             )}
           </div>
@@ -97,9 +114,21 @@ export function SnagListItem({
                 }`}>
                   Entry #{snag.snagNumber} - {snag.name || 'Untitled Entry'}
                 </h3>
-                <Badge variant={getStatusVariant(snag.status)} className="text-xs px-2 py-0.5">
-                  {snag.status}
-                </Badge>
+                <div className="flex flex-col items-start">
+                  <div className="flex items-center gap-2">
+                    <Badge variant={getStatusVariant(snag.status)} className="text-xs px-2 py-0.5">
+                      {snag.status}
+                    </Badge>
+                    {snag.status === 'Completed' && (
+                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                    )}
+                  </div>
+                  {snag.status === 'Completed' && formattedCompletionDate && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Completed on {formattedCompletionDate}
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
                 <div className="flex items-center gap-1">

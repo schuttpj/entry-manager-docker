@@ -3,6 +3,91 @@ import { Mic, Info, StopCircle, Play, Trash2, Sparkles } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { saveVoiceRecording, getVoiceRecordingsByProject, getVoiceRecording, getDB } from '@/lib/db';
 import { useOpenAI } from '@/hooks/use-openai';
+import { transcribeAudio } from '@/lib/openai';
+import { createPortal } from 'react-dom';
+
+interface TranscriptionPopupProps {
+  isOpen: boolean;
+  onClose: () => void;
+  transcription: string;
+  isDarkMode?: boolean;
+}
+
+function TranscriptionPopup({ isOpen, onClose, transcription, isDarkMode }: TranscriptionPopupProps) {
+  const [dragPosition, setDragPosition] = useState({ x: window.innerWidth / 2 - 192, y: 100 });
+  const dragRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (dragRef.current) {
+      isDraggingRef.current = true;
+      dragStartRef.current = {
+        x: e.clientX - dragPosition.x,
+        y: e.clientY - dragPosition.y
+      };
+      
+      const handleMouseMove = (e: MouseEvent) => {
+        if (isDraggingRef.current) {
+          setDragPosition({
+            x: e.clientX - dragStartRef.current.x,
+            y: e.clientY - dragStartRef.current.y
+          });
+        }
+      };
+      
+      const handleMouseUp = () => {
+        isDraggingRef.current = false;
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+      
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const popup = (
+    <div 
+      className={`fixed z-[9999] w-96 rounded-lg shadow-lg ${
+        isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
+      }`}
+      style={{
+        top: `${dragPosition.y}px`,
+        left: `${dragPosition.x}px`,
+        transform: 'none'
+      }}
+    >
+      <div 
+        ref={dragRef}
+        className={`p-3 rounded-t-lg flex justify-between items-center cursor-grab active:cursor-grabbing ${
+          isDarkMode ? 'bg-gray-700' : 'bg-gray-100'
+        }`}
+        onMouseDown={handleMouseDown}
+      >
+        <span className="font-medium">Transcription</span>
+        <button
+          onClick={onClose}
+          className={`p-1 rounded-full hover:bg-opacity-80 ${
+            isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-200'
+          }`}
+        >
+          ×
+        </button>
+      </div>
+      <div className="p-4">
+        <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+          {transcription || 'No transcription available'}
+        </p>
+      </div>
+    </div>
+  );
+
+  // Use createPortal to render at the root level
+  return createPortal(popup, document.body);
+}
 
 interface VoiceRecording {
   id: string;
@@ -30,6 +115,8 @@ export function AIVoiceAssistant({ isDarkMode = false, projectName }: AIVoiceAss
   const [isSaving, setIsSaving] = useState(false);
   const [recordings, setRecordings] = useState<VoiceRecording[]>([]);
   const [currentlyPlaying, setCurrentlyPlaying] = useState<string | null>(null);
+  const [showTranscription, setShowTranscription] = useState(false);
+  const [selectedRecording, setSelectedRecording] = useState<VoiceRecording | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Load recordings when project changes
@@ -299,6 +386,63 @@ export function AIVoiceAssistant({ isDarkMode = false, projectName }: AIVoiceAss
     }
   };
 
+  const handleTranscriptionClick = async (recording: VoiceRecording) => {
+    console.log('Handling transcription click for recording:', recording);
+    setSelectedRecording(recording);
+    
+    if (recording.transcription) {
+      console.log('Using existing transcription:', recording.transcription);
+      setShowTranscription(true);
+      return;
+    }
+
+    try {
+      console.log('Starting transcription for audio blob:', recording.audioBlob);
+      console.log('Audio blob type:', recording.audioBlob.type);
+      console.log('Audio blob size:', recording.audioBlob.size);
+
+      const result = await transcribeAudio(recording.audioBlob);
+      console.log('Transcription result:', result);
+
+      if (result.error) {
+        console.error('Transcription error:', result.error);
+        setError(result.error);
+        return;
+      }
+
+      // Update recording with transcription
+      const db = await getDB();
+      console.log('Updating recording in database with transcription');
+      await db.put('voiceRecordings', {
+        ...recording,
+        transcription: result.text
+      });
+
+      console.log('Updating local state with transcription');
+      // Update local state
+      setRecordings(prevRecordings => 
+        prevRecordings.map(rec => 
+          rec.id === recording.id 
+            ? { ...rec, transcription: result.text }
+            : rec
+        )
+      );
+
+      setSelectedRecording({ ...recording, transcription: result.text });
+      setShowTranscription(true);
+    } catch (error) {
+      console.error('Error in handleTranscriptionClick:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        });
+      }
+      setError('Failed to transcribe audio');
+    }
+  };
+
   return (
     <div className={`mt-4 rounded-lg shadow p-4 transition-colors duration-300 ${
       isDarkMode ? 'bg-gray-800' : 'bg-white'
@@ -423,9 +567,9 @@ export function AIVoiceAssistant({ isDarkMode = false, projectName }: AIVoiceAss
                   <Button
                     variant="ghost"
                     size="sm"
-                    disabled
+                    onClick={() => handleTranscriptionClick(recording)}
                   >
-                    <Sparkles className="w-4 h-4 text-yellow-500" />
+                    <Sparkles className={`w-4 h-4 text-yellow-500 ${recording.transcription ? 'opacity-100' : 'opacity-50'}`} />
                   </Button>
                 </div>
               </div>
@@ -433,6 +577,14 @@ export function AIVoiceAssistant({ isDarkMode = false, projectName }: AIVoiceAss
           </div>
         </div>
       )}
+
+      {/* Transcription Popup */}
+      <TranscriptionPopup
+        isOpen={showTranscription}
+        onClose={() => setShowTranscription(false)}
+        transcription={selectedRecording?.transcription || ''}
+        isDarkMode={isDarkMode}
+      />
     </div>
   );
 } 
