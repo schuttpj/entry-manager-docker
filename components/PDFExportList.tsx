@@ -312,7 +312,7 @@ export default function PDFExportList({
             doc.setTextColor(34, 197, 94);
             
             const watermarkX = margin + contentWidth;
-            const watermarkY = yPosition + (rowHeight / 2);
+            const watermarkY = yPosition + (rowHeight / 2) - 5; // Move up slightly to make room for date
             
             doc.text("COMPLETED", watermarkX, watermarkY, { 
               align: 'right',
@@ -322,7 +322,7 @@ export default function PDFExportList({
             const dateText = formatDateSafely(snag.completionDate);
             if (dateText) {
               doc.setFontSize(watermarkFontSize * 0.6);
-              doc.text(dateText, watermarkX, watermarkY, {
+              doc.text(dateText, watermarkX, watermarkY + 8, { // Position date 8mm below COMPLETED text
                 align: 'right',
                 baseline: 'middle'
               });
