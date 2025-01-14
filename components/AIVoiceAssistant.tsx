@@ -14,11 +14,21 @@ interface TranscriptionPopupProps {
 }
 
 function TranscriptionPopup({ isOpen, onClose, transcription, isDarkMode }: TranscriptionPopupProps) {
-  const [dragPosition, setDragPosition] = useState({ x: window.innerWidth / 2 - 192, y: 100 });
+  const [dragPosition, setDragPosition] = useState({ x: 0, y: 100 });
+
+  // Set initial position after mount
+  useEffect(() => {
+    setDragPosition({ x: window.innerWidth / 2 - 300, y: 100 });
+  }, []);
+
   const dragRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
+  const [activeTab, setActiveTab] = useState<'transcription' | 'summary'>('summary');
+  const [summary, setSummary] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
+  // Handle dragging logic
   const handleMouseDown = (e: React.MouseEvent) => {
     if (dragRef.current) {
       isDraggingRef.current = true;
@@ -47,11 +57,41 @@ function TranscriptionPopup({ isOpen, onClose, transcription, isDarkMode }: Tran
     }
   };
 
+  // Generate summary when transcription changes
+  useEffect(() => {
+    const generateSummary = async () => {
+      if (!transcription) return;
+      
+      setIsLoading(true);
+      try {
+        const response = await fetch('/api/summarize', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ text: transcription }),
+        });
+
+        if (!response.ok) throw new Error('Failed to generate summary');
+        
+        const data = await response.json();
+        setSummary(data.summary);
+      } catch (error) {
+        console.error('Error generating summary:', error);
+        setSummary('Failed to generate summary. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    generateSummary();
+  }, [transcription]);
+
   if (!isOpen) return null;
 
   const popup = (
     <div 
-      className={`fixed z-[9999] w-96 rounded-lg shadow-lg ${
+      className={`fixed z-[9999] w-[600px] rounded-lg shadow-lg ${
         isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
       }`}
       style={{
@@ -67,7 +107,39 @@ function TranscriptionPopup({ isOpen, onClose, transcription, isDarkMode }: Tran
         }`}
         onMouseDown={handleMouseDown}
       >
-        <span className="font-medium">Transcription</span>
+        <div className="flex items-center gap-4">
+          <span className="font-medium">Voice Note</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setActiveTab('summary')}
+              className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                activeTab === 'summary'
+                  ? isDarkMode
+                    ? 'bg-gray-600 text-white'
+                    : 'bg-gray-200 text-gray-900'
+                  : isDarkMode
+                  ? 'text-gray-300 hover:bg-gray-600'
+                  : 'text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Summary
+            </button>
+            <button
+              onClick={() => setActiveTab('transcription')}
+              className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                activeTab === 'transcription'
+                  ? isDarkMode
+                    ? 'bg-gray-600 text-white'
+                    : 'bg-gray-200 text-gray-900'
+                  : isDarkMode
+                  ? 'text-gray-300 hover:bg-gray-600'
+                  : 'text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Raw Transcription
+            </button>
+          </div>
+        </div>
         <button
           onClick={onClose}
           className={`p-1 rounded-full hover:bg-opacity-80 ${
@@ -77,15 +149,33 @@ function TranscriptionPopup({ isOpen, onClose, transcription, isDarkMode }: Tran
           ×
         </button>
       </div>
-      <div className="p-4">
-        <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-          {transcription || 'No transcription available'}
-        </p>
+      <div className="p-4 max-h-[70vh] overflow-y-auto">
+        {activeTab === 'summary' ? (
+          <div>
+            {isLoading ? (
+              <div className={`flex items-center justify-center py-8 ${
+                isDarkMode ? 'text-gray-400' : 'text-gray-500'
+              }`}>
+                Generating summary...
+              </div>
+            ) : summary ? (
+              <div className={`prose ${isDarkMode ? 'prose-invert' : ''} max-w-none`}
+                   dangerouslySetInnerHTML={{ __html: summary }} />
+            ) : (
+              <div className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                No summary available
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className={`text-sm whitespace-pre-wrap ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+            {transcription || 'No transcription available'}
+          </div>
+        )}
       </div>
     </div>
   );
 
-  // Use createPortal to render at the root level
   return createPortal(popup, document.body);
 }
 

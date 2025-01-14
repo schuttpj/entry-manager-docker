@@ -101,19 +101,24 @@ export function UploadArea({
         let completionDate: Date | undefined = undefined;
         
         if (lines[3]) {
-          const statusParts = lines[3].split('-');
-          status = statusParts[0] as BatchFields['status'];
+          console.log('Status line found:', lines[3]);
+          // Split only on the first hyphen to keep the date intact
+          const [statusPart, ...dateParts] = lines[3].split('-');
+          status = statusPart.trim() as BatchFields['status'];
+          console.log('Parsed status:', status);
           
           // If status is Completed and there's a date part, try to parse it
-          if (status === 'Completed' && statusParts[1]) {
+          if (status === 'Completed' && dateParts.length > 0) {
             try {
-              // Validate the date format strictly (YYYY-MM-DD)
-              const dateStr = statusParts[1].trim();
+              // Join back the date parts in case there were hyphens in the date
+              const dateStr = dateParts.join('-').trim();
+              console.log('Found completion date string:', dateStr);
               if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
                 const date = new Date(dateStr);
                 // Check if date is valid and not NaN
                 if (!isNaN(date.getTime())) {
                   completionDate = date;
+                  console.log('Valid completion date parsed:', completionDate);
                 } else {
                   console.warn(`Invalid completion date value in file ${file.name}. Expected YYYY-MM-DD.`);
                 }
@@ -137,6 +142,7 @@ export function UploadArea({
         };
 
         console.log('Final fields object:', fields);
+        console.log('Completion date in fields:', fields.completionDate);
 
         // Validate priority and status
         if (fields.priority && !['Low', 'Medium', 'High'].includes(fields.priority)) {
@@ -173,6 +179,9 @@ export function UploadArea({
       const newPreviews = imageFiles.map(file => {
         const baseFileName = file.name.toLowerCase().replace(/\.[^/.]+$/, "");
         const fields = descriptionsMap[baseFileName] || { description: '' };
+        console.log('Creating preview for file:', baseFileName);
+        console.log('Fields from description:', fields);
+        console.log('Completion date for preview:', fields.completionDate);
         
         return {
           file,
@@ -237,7 +246,8 @@ export function UploadArea({
                   : 'In Progress';
                 
                 console.log('Preview before addSnag:', preview);
-                console.log('Observation date before addSnag:', preview.observationDate);
+                console.log('Status:', status);
+                console.log('Completion date before addSnag:', preview.completionDate);
                 
                 await addSnag({
                   projectName,
@@ -247,7 +257,7 @@ export function UploadArea({
                   assignedTo: preview.assignedTo || '',
                   status,
                   location: preview.location || '',
-                  completionDate: preview.completionDate || null,
+                  completionDate: status === 'Completed' ? preview.completionDate || null : null,
                   observationDate: preview.observationDate || new Date(preview.file.lastModified)
                 });
                 

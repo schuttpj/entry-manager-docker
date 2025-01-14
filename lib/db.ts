@@ -264,6 +264,12 @@ export async function addSnag(snag: Omit<SnagListDB['snags']['value'], 'id' | 'c
     const now = new Date();
     const name = await generateAIName(snag.description);
     
+    console.log('Adding snag to database:', {
+      ...snag,
+      status: snag.status,
+      completionDate: snag.completionDate
+    });
+    
     // Start a new transaction for getting the snag number and adding the snag
     const tx = db.transaction('snags', 'readwrite');
     try {
@@ -285,6 +291,12 @@ export async function addSnag(snag: Omit<SnagListDB['snags']['value'], 'id' | 'c
         createdAt: now,
         updatedAt: now
       };
+
+      console.log('Final snag object before storing:', {
+        id: newSnag.id,
+        status: newSnag.status,
+        completionDate: newSnag.completionDate
+      });
 
       await store.add(newSnag);
       await tx.done;
