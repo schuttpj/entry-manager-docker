@@ -161,64 +161,77 @@ export function UploadArea({
     });
   };
 
-  const generateName = async (file: File, projectName: string): Promise<string> => {
+  const generateName = async (file: File, projectName: string, existingDescription?: string): Promise<string> => {
     try {
-      const reader = new FileReader();
-      const imageData = await new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      console.log('🔄 Starting name generation for file:', file.name);
+      // Use existing description if provided, otherwise generate from filename
+      const description = existingDescription || file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, ' ').trim();
+      console.log('📝 Using description for name generation:', description);
 
+      console.log('🚀 Sending request to generate-name API...');
       const response = await fetch('/api/generate-name', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageData, projectName })
+        body: JSON.stringify({ description })
       });
 
       if (!response.ok) {
+        console.error('❌ API response not OK:', {
+          status: response.status,
+          statusText: response.statusText
+        });
         throw new Error('Failed to generate name');
       }
 
-      const { name } = await response.json();
-      return name;
+      const data = await response.json();
+      console.log('✅ API response:', data);
+      return data.name;
     } catch (error) {
-      console.error('Error generating name:', error);
+      console.error('❌ Error in generateName:', error);
       return 'Untitled Entry';
     }
   };
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    console.log('📥 Files dropped:', acceptedFiles.map(f => f.name));
     // Filter out text files and image files
     const textFiles = acceptedFiles.filter(file => file.type === 'text/plain');
     const imageFiles = acceptedFiles.filter(file => file.type.startsWith('image/'));
+    console.log('📊 Files breakdown:', {
+      textFiles: textFiles.length,
+      imageFiles: imageFiles.length
+    });
 
     // If there are text files, read their contents
     if (textFiles.length > 0) {
+      console.log('📄 Processing text files...');
       // Read all text files and merge their contents
       const descriptionsMap: Record<string, BatchFields> = {};
       await Promise.all(textFiles.map(async (file) => {
         const fileDescriptions = await readDescriptionFile(file);
         Object.assign(descriptionsMap, fileDescriptions);
       }));
+      console.log('📋 Descriptions map:', descriptionsMap);
       setDescriptionFile(textFiles[0]); // Show the first file name for UI purposes
       
       // Match images with descriptions based on filename (case-insensitive)
+      console.log('🔄 Processing image files with descriptions...');
       const newPreviews = await Promise.all(imageFiles.map(async file => {
         const baseFileName = file.name.toLowerCase().replace(/\.[^/.]+$/, "");
+        console.log('📷 Processing image:', baseFileName);
         const fields = descriptionsMap[baseFileName] || { description: '' };
+        console.log('📝 Found fields:', fields);
         
-        // Generate name if no description is provided
-        if (!fields.description) {
-          const generatedName = await generateName(file, projectName);
-          fields.description = generatedName;
-        }
+        // Always generate an AI name, using the description if available
+        console.log('⚡ Generating AI name from description...');
+        const generatedName = await generateName(file, projectName, fields.description);
+        console.log('✨ Generated name:', generatedName);
         
-        return {
+        const preview = {
           file,
           preview: URL.createObjectURL(file),
-          name: fields.description,
-          description: fields.description,
+          name: generatedName, // Use AI-generated name
+          description: fields.description || generatedName, // Keep original description if available
           priority: fields.priority,
           assignedTo: fields.assignedTo,
           status: fields.status,
@@ -226,13 +239,19 @@ export function UploadArea({
           completionDate: fields.completionDate,
           observationDate: fields.observationDate
         };
+        console.log('✅ Created preview:', preview);
+        return preview;
       }));
 
+      console.log('📊 All previews generated:', newPreviews);
       setPreviews(prev => [...prev, ...newPreviews]);
     } else {
+      console.log('🖼️ Processing image files only...');
       // Handle only image files - generate names for all
       const newPreviews = await Promise.all(imageFiles.map(async file => {
+        console.log('📷 Generating name for:', file.name);
         const generatedName = await generateName(file, projectName);
+        console.log('✨ Generated name:', generatedName);
         return {
           file,
           preview: URL.createObjectURL(file),
@@ -240,6 +259,7 @@ export function UploadArea({
           description: generatedName
         };
       }));
+      console.log('📊 All previews generated:', newPreviews);
       setPreviews(prev => [...prev, ...newPreviews]);
     }
   }, [projectName]);
