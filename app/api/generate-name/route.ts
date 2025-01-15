@@ -21,7 +21,7 @@ export async function POST(req: Request) {
       messages: [
         {
           role: 'system',
-          content: 'You are a construction site snag list assistant. Generate a concise but descriptive name for a snag based on the image provided. The name should be professional and clearly indicate the issue or area of concern. Keep it under 50 characters.'
+          content: 'You are a construction site snag list assistant. Generate an extremely concise name for a snag based on the image provided. The name MUST follow these rules:\n- Maximum 3 words\n- No articles (a, an, the)\n- Focus on the main issue/defect\n- Be specific and professional\n- Start with the issue type (e.g., "Cracked", "Missing", "Damaged")\nExamples:\n"Cracked Bathroom Tile"\n"Missing Door Handle"\n"Damaged Wall Paint"'
         },
         {
           role: 'user',
