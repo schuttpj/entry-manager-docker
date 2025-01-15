@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { XMarkIcon as XIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 
 interface Props {
-  position: { x: number; y: number };
   onClose: () => void;
   transcription: string;
   summary?: string;
@@ -14,28 +13,48 @@ interface SummaryEntry {
   description: string;
 }
 
-const TranscriptionPopup = ({ position, onClose, transcription, summary }: Props) => {
+const TranscriptionPopup = ({ onClose, transcription, summary }: Props) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'raw'>('summary');
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 600, height: 400 });
   const [isResizing, setIsResizing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [position, setPosition] = useState({ x: window.innerWidth / 2 - 300, y: window.innerHeight / 2 - 200 });
   const popupRef = useRef<HTMLDivElement>(null);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!popupRef.current) return;
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartRef.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    };
+  };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing || !popupRef.current) return;
+      if (!isDragging) return;
       
-      const newWidth = Math.max(300, e.clientX - popupRef.current.getBoundingClientRect().left);
-      const newHeight = Math.max(200, e.clientY - popupRef.current.getBoundingClientRect().top);
+      const newX = e.clientX - dragStartRef.current.x;
+      const newY = e.clientY - dragStartRef.current.y;
       
-      setSize({ width: newWidth, height: newHeight });
+      // Ensure the modal stays within viewport bounds
+      const maxX = window.innerWidth - size.width;
+      const maxY = window.innerHeight - size.height;
+      
+      setPosition({
+        x: Math.min(Math.max(0, newX), maxX),
+        y: Math.min(Math.max(0, newY), maxY)
+      });
     };
 
     const handleMouseUp = () => {
-      setIsResizing(false);
+      setIsDragging(true);
     };
 
-    if (isResizing) {
+    if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
     }
@@ -44,7 +63,7 @@ const TranscriptionPopup = ({ position, onClose, transcription, summary }: Props
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing]);
+  }, [isDragging, size.width, size.height]);
 
   const parseSummaryEntries = (text: string): SummaryEntry[] => {
     const entries: SummaryEntry[] = [];
@@ -76,8 +95,8 @@ const TranscriptionPopup = ({ position, onClose, transcription, summary }: Props
       ref={popupRef}
       className="fixed bg-white rounded-lg shadow-lg overflow-hidden"
       style={{
-        left: position.x,
-        top: position.y,
+        left: `${position.x}px`,
+        top: `${position.y}px`,
         width: size.width,
         height: size.height,
         minWidth: 300,

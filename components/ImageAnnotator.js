@@ -64,7 +64,7 @@ const ImageAnnotator = ({ imageUrl, onSave, onClose, existingAnnotations = [] })
 
   const handleSave = () => {
     const annotationsWithComments = annotations.filter(pin => pin.text.trim());
-    onSave({ annotations: annotationsWithComments });
+    onSave(annotationsWithComments);
   };
 
   const deletePin = (id) => {

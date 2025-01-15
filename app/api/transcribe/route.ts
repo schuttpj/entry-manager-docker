@@ -2,45 +2,45 @@ import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
-  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY
+  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '',
 });
 
-export async function POST(req: Request) {
+export async function POST(request: Request) {
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as Blob | null;
+    const formData = await request.formData();
+    const audioFile = formData.get('audio') as Blob;
 
-    if (!file) {
+    if (!audioFile) {
       return NextResponse.json(
         { error: 'No audio file provided' },
         { status: 400 }
       );
     }
 
-    // Convert blob to file with proper name and type
-    const audioFile = new File([file], 'recording.webm', { type: file.type });
+    // Convert Blob to File with .wav extension
+    const file = new File([audioFile], 'recording.wav', { type: 'audio/wav' });
 
     const transcription = await openai.audio.transcriptions.create({
-      file: audioFile,
-      model: 'whisper-1',
-      language: 'en',
-      response_format: 'json',
-      temperature: 0
+      file: file,
+      model: "whisper-1",
+      language: "en",
     });
 
-    return NextResponse.json({
-      text: transcription.text
-    });
-  } catch (error) {
+    return NextResponse.json({ text: transcription.text });
+  } catch (error: any) {
     console.error('Transcription error:', error);
-    if (error instanceof OpenAI.APIError) {
+    
+    // Check if it's an OpenAI API error
+    if (error.response?.data?.error) {
       return NextResponse.json(
-        { error: `OpenAI API error: ${error.message}` },
-        { status: error.status || 500 }
+        { error: `OpenAI API error: ${error.response.data.error.message}` },
+        { status: 500 }
       );
     }
+
+    // Handle other types of errors
     return NextResponse.json(
-      { error: 'Failed to transcribe audio. Please try again.' },
+      { error: `Failed to transcribe audio: ${error.message}` },
       { status: 500 }
     );
   }

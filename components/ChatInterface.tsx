@@ -17,6 +17,7 @@ interface ChatInterfaceProps {
 // Load chat history from localStorage
 const loadChatHistory = (): ChatMessage[] => {
   try {
+    if (typeof window === 'undefined') return [];
     const saved = localStorage.getItem('chatHistory');
     if (saved) {
       return JSON.parse(saved).map((msg: any) => ({
@@ -24,8 +25,8 @@ const loadChatHistory = (): ChatMessage[] => {
         timestamp: new Date(msg.timestamp)
       }));
     }
-  } catch (err) {
-    console.error('Failed to load chat history:', err);
+  } catch (error) {
+    console.error('Failed to load chat history:', error);
   }
   return [];
 };

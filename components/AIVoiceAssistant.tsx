@@ -21,13 +21,7 @@ interface TranscriptionPopupProps {
 }
 
 function TranscriptionPopup({ isOpen, onClose, transcription, isDarkMode }: TranscriptionPopupProps) {
-  const [dragPosition, setDragPosition] = useState({ x: 0, y: 100 });
-
-  // Set initial position after mount
-  useEffect(() => {
-    setDragPosition({ x: window.innerWidth / 2 - 300, y: 100 });
-  }, []);
-
+  const [position, setPosition] = useState({ x: 0, y: 0 });
   const dragRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -35,33 +29,47 @@ function TranscriptionPopup({ isOpen, onClose, transcription, isDarkMode }: Tran
   const [summary, setSummary] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Handle dragging logic
+  useEffect(() => {
+    // Set initial position after component mounts
+    setPosition({
+      x: window.innerWidth / 2 - 300,
+      y: window.innerHeight / 2 - 200
+    });
+  }, []);
+
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (dragRef.current) {
-      isDraggingRef.current = true;
-      dragStartRef.current = {
-        x: e.clientX - dragPosition.x,
-        y: e.clientY - dragPosition.y
-      };
+    if (!dragRef.current) return;
+    e.preventDefault();
+    isDraggingRef.current = true;
+    dragStartRef.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    };
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
       
-      const handleMouseMove = (e: MouseEvent) => {
-        if (isDraggingRef.current) {
-          setDragPosition({
-            x: e.clientX - dragStartRef.current.x,
-            y: e.clientY - dragStartRef.current.y
-          });
-        }
-      };
+      const newX = e.clientX - dragStartRef.current.x;
+      const newY = e.clientY - dragStartRef.current.y;
       
-      const handleMouseUp = () => {
-        isDraggingRef.current = false;
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
-      };
+      // Ensure the modal stays within viewport bounds
+      const maxX = window.innerWidth - 600; // 600 is modal width
+      const maxY = window.innerHeight - 400; // approximate modal height
       
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
-    }
+      setPosition({
+        x: Math.min(Math.max(0, newX), maxX),
+        y: Math.min(Math.max(0, newY), maxY)
+      });
+    };
+    
+    const handleMouseUp = () => {
+      isDraggingRef.current = false;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
   };
 
   // Generate summary when transcription changes
@@ -102,9 +110,8 @@ function TranscriptionPopup({ isOpen, onClose, transcription, isDarkMode }: Tran
         isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
       }`}
       style={{
-        top: `${dragPosition.y}px`,
-        left: `${dragPosition.x}px`,
-        transform: 'none'
+        left: `${position.x}px`,
+        top: `${position.y}px`
       }}
     >
       <div 

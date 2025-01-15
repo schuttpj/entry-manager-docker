@@ -167,6 +167,7 @@ export function UploadArea({
       // Use existing description if provided, otherwise generate from filename
       const description = existingDescription || file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, ' ').trim();
       console.log('📝 Using description for name generation:', description);
+      console.log('🌐 Project name:', projectName);
 
       console.log('🚀 Sending request to generate-name API...');
       const response = await fetch('/api/generate-name', {
@@ -175,19 +176,30 @@ export function UploadArea({
         body: JSON.stringify({ description })
       });
 
+      console.log('📡 API Response status:', response.status);
+      
       if (!response.ok) {
+        const errorText = await response.text();
         console.error('❌ API response not OK:', {
           status: response.status,
-          statusText: response.statusText
+          statusText: response.statusText,
+          error: errorText
         });
-        throw new Error('Failed to generate name');
+        throw new Error(`Failed to generate name: ${response.statusText}`);
       }
 
       const data = await response.json();
-      console.log('✅ API response:', data);
+      console.log('✅ API response data:', data);
+      
+      if (!data.name) {
+        console.error('❌ No name in API response:', data);
+        throw new Error('No name returned from API');
+      }
+
       return data.name;
     } catch (error) {
       console.error('❌ Error in generateName:', error);
+      console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
       return 'Untitled Entry';
     }
   };

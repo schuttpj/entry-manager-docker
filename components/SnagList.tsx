@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getSnagsByProject, deleteSnag, updateSnag, updateSnagAnnotations, createBackup, downloadBackupFile, restoreFromBackup } from '@/lib/db';
-import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare, AlertCircle, Calendar, Grid, List, Database, Upload } from 'lucide-react';
+import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare, AlertCircle, Calendar, Grid, List, Database, Upload, CheckSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { Annotation, Snag } from '@/types/snag';
 import ImageAnnotator from './ImageAnnotator';
@@ -162,17 +162,23 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
     
     // Apply search filter
     if (searchTerm) {
-      filtered = filtered.filter(snag => 
-        (snag.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (snag.assignedTo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (snag.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (snag.priority || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (snag.status || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (snag.location || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        snag.annotations?.some(annotation => 
-          (annotation.text || '').toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      );
+      filtered = filtered.filter(snag => {
+        if (!searchTerm) return true;
+        
+        const searchTermLower = searchTerm.toLowerCase();
+        const hasMatchingAnnotation = Array.isArray(snag.annotations) && 
+          snag.annotations.some(annotation => annotation?.text?.toLowerCase().includes(searchTermLower));
+
+        return (
+          (snag.description || '').toLowerCase().includes(searchTermLower) ||
+          (snag.priority || '').toLowerCase().includes(searchTermLower) ||
+          (snag.assignedTo || '').toLowerCase().includes(searchTermLower) ||
+          (snag.status || '').toLowerCase().includes(searchTermLower) ||
+          (snag.location || '').toLowerCase().includes(searchTermLower) ||
+          String(snag.snagNumber).includes(searchTermLower) ||
+          hasMatchingAnnotation
+        );
+      });
     }
 
     // Apply sorting
@@ -569,105 +575,123 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search entries..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-          <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newest">Newest First</SelectItem>
-              <SelectItem value="oldest">Oldest First</SelectItem>
-              <SelectItem value="priority">By Priority</SelectItem>
-              <SelectItem value="status">By Status</SelectItem>
-              <SelectItem value="entry-asc">Entry # (Ascending)</SelectItem>
-              <SelectItem value="entry-desc">Entry # (Descending)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="flex border rounded-md">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleBackupClick}
-              title="Backup Data"
-              className="rounded-l-md rounded-r-none border-r"
-            >
-              <Database className="h-4 w-4" />
-            </Button>
+      <div className="sticky top-0 z-50 bg-white dark:bg-gray-800 shadow-sm py-3 px-4 -mx-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search entries..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="oldest">Oldest First</SelectItem>
+                <SelectItem value="priority">By Priority</SelectItem>
+                <SelectItem value="status">By Status</SelectItem>
+                <SelectItem value="entry-asc">Entry # (Ascending)</SelectItem>
+                <SelectItem value="entry-desc">Entry # (Descending)</SelectItem>
+              </SelectContent>
+            </Select>
             <Button
               variant="ghost"
               size="icon"
               onClick={() => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = '.json';
-                input.onchange = async (e) => {
-                  const file = (e.target as HTMLInputElement).files?.[0];
-                  if (!file) return;
-                  
-                  if (!window.confirm('Restoring will replace all current data. Are you sure you want to continue?')) {
-                    return;
-                  }
-
-                  try {
-                    const backupData = JSON.parse(await file.text());
-                    await restoreFromBackup(backupData);
-                    toast.success('Data restored successfully!');
-                    refreshList();
-                  } catch (error) {
-                    console.error('Restore failed:', error);
-                    toast.error('Failed to restore backup');
-                  }
-                };
-                input.click();
+                const allSelected = filteredSnags.length === selectedSnags.size;
+                if (allSelected) {
+                  setSelectedSnags(new Set());
+                } else {
+                  setSelectedSnags(new Set(filteredSnags.map(snag => snag.id)));
+                }
               }}
-              title="Restore from Backup"
-              className="rounded-r-md rounded-l-none"
+              title="Select All"
+              className="h-8 w-8 hover:bg-accent"
             >
-              <Upload className="h-4 w-4" />
+              <CheckSquare className={`h-4 w-4 ${selectedSnags.size === filteredSnags.length ? 'text-primary fill-primary/30' : ''}`} />
             </Button>
           </div>
 
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => {
-              setViewMode('grid');
-              setIsGridViewOpen(true);
-            }}
-            title="Grid View"
-            className={viewMode === 'grid' ? 'bg-accent' : ''}
-          >
-            <Grid className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="flex border rounded-md">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleBackupClick}
+                title="Backup Data"
+                className="rounded-l-md rounded-r-none border-r"
+              >
+                <Database className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.accept = '.json';
+                  input.onchange = async (e) => {
+                    const file = (e.target as HTMLInputElement).files?.[0];
+                    if (!file) return;
+                    
+                    if (!window.confirm('Restoring will replace all current data. Are you sure you want to continue?')) {
+                      return;
+                    }
 
-          {selectedSnags.size > 0 && (
-            <>
-              <PDFExport
-                snags={snags.filter(snag => selectedSnags.has(snag.id))}
-                projectName={projectName}
-              />
-              <PDFExportList
-                snags={snags.filter(snag => selectedSnags.has(snag.id))}
-                projectName={projectName}
-                isDarkMode={isDarkMode}
-                onClose={() => setSelectedSnags(new Set())}
-                sortOrder={sortBy === 'oldest' ? 'asc' : 'desc'}
-              />
-            </>
-          )}
+                    try {
+                      const backupData = JSON.parse(await file.text());
+                      await restoreFromBackup(backupData);
+                      toast.success('Data restored successfully!');
+                      refreshList();
+                    } catch (error) {
+                      console.error('Restore failed:', error);
+                      toast.error('Failed to restore backup');
+                    }
+                  };
+                  input.click();
+                }}
+                title="Restore from Backup"
+                className="rounded-r-md rounded-l-none"
+              >
+                <Upload className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => {
+                setViewMode('grid');
+                setIsGridViewOpen(true);
+              }}
+              title="Grid View"
+              className={viewMode === 'grid' ? 'bg-accent' : ''}
+            >
+              <Grid className="h-4 w-4" />
+            </Button>
+
+            {selectedSnags.size > 0 && (
+              <>
+                <PDFExport
+                  snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))}
+                  projectName={projectName}
+                />
+                <PDFExportList
+                  snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))}
+                  projectName={projectName}
+                  isDarkMode={isDarkMode}
+                  onClose={() => setSelectedSnags(new Set())}
+                  sortOrder={sortBy === 'oldest' ? 'asc' : 'desc'}
+                />
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -711,8 +735,12 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
         snags={filteredSnags}
         isOpen={isGridViewOpen}
         onClose={() => {
+          console.log('GridView onClose called in SnagList');
+          console.log('Current viewMode:', viewMode);
+          console.log('Current isGridViewOpen:', isGridViewOpen);
           setIsGridViewOpen(false);
           setViewMode('list');
+          console.log('States updated in SnagList');
         }}
         isDarkMode={isDarkMode}
         onSnagUpdate={async (updatedSnag) => {
