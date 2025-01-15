@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Send, GripHorizontal, Trash2, Mic, MicOff, Loader2, Copy, Check } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import ReactMarkdown from 'react-markdown';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -356,7 +357,7 @@ export function ChatInterface({ isOpen, onClose, isDarkMode = false }: ChatInter
       >
         <div className="flex items-center gap-3">
           <GripHorizontal className="w-5 h-5 opacity-70" />
-          <span className="font-semibold text-lg">AI Assistant</span>
+          <span className="font-semibold text-lg text-black dark:text-white">AI Assistant</span>
           <span className="text-xs opacity-50">(Drag to move)</span>
         </div>
         <div className="flex items-center gap-3">
@@ -414,10 +415,18 @@ export function ChatInterface({ isOpen, onClose, isDarkMode = false }: ChatInter
                   : 'bg-gray-100'
               }`}
             >
-              <div className="prose max-w-none mb-2" style={{ color: 'inherit' }}>
-                {message.content}
+              <div className={`prose prose-sm max-w-none ${isDarkMode ? 'prose-invert' : ''} prose-p:my-0 prose-ul:my-0 prose-ul:pl-4`}>
+                <ReactMarkdown
+                  components={{
+                    p: ({node, ...props}) => <p className="mb-2 last:mb-0" {...props} />,
+                    ul: ({node, ...props}) => <ul className="list-disc pl-4 mb-2 last:mb-0" {...props} />,
+                    li: ({node, ...props}) => <li className="mb-1 last:mb-0" {...props} />
+                  }}
+                >
+                  {message.content}
+                </ReactMarkdown>
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center justify-between gap-4 mt-2">
                 <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                   {message.timestamp.toLocaleTimeString()}
                 </div>
@@ -468,7 +477,7 @@ export function ChatInterface({ isOpen, onClose, isDarkMode = false }: ChatInter
                   handleSubmit(e);
                 }
               }}
-              placeholder="Type a message... (Press Enter to send, Shift + Enter for new line)"
+              placeholder="Type 'search:' followed by your query to search the web (e.g. 'search: what is the weather?'). Press Enter to send, Shift + Enter for new line"
               className={`w-full p-3 rounded-lg border resize-none ${
                 isDarkMode
                   ? 'bg-gray-900 border-gray-800 text-white placeholder-gray-500'

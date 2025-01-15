@@ -586,17 +586,17 @@ export function VoiceNotesAssistant({ isDarkMode = false, projectName }: AIVoice
                   <Info className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent className="max-w-[300px] p-4">
-                <p className="text-sm">
+              <TooltipContent className="max-w-[300px] p-4 bg-white dark:bg-gray-800 border shadow-md z-50">
+                <p className="text-sm text-gray-900 dark:text-gray-100">
                   Voice Notes Assistant helps you create and manage voice notes:
-                  <ul className="list-disc pl-4 mt-2">
-                    <li>Click to start/stop recording your voice note</li>
-                    <li>Your recording will be automatically transcribed</li>
-                    <li>AI will generate a concise summary of your note</li>
-                    <li>Access both transcription and summary by clicking the AI icon</li>
-                    <li>Perfect for quick thoughts, reminders, and meeting notes</li>
-                  </ul>
                 </p>
+                <ul className="list-disc pl-4 mt-2 text-sm text-gray-900 dark:text-gray-100">
+                  <li>Click to start/stop recording your voice note</li>
+                  <li>Your recording will be automatically transcribed</li>
+                  <li>AI will generate a concise summary of your note</li>
+                  <li>Access both transcription and summary by clicking the AI icon</li>
+                  <li>Perfect for quick thoughts, reminders, and meeting notes</li>
+                </ul>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
