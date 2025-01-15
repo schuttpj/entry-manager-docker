@@ -1,32 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Send, GripHorizontal, Trash2 } from 'lucide-react';
+import { X, Send, GripHorizontal, Trash2, Mic, MicOff, Loader2, Copy, Check } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { getSnagContext, searchSnags } from '@/lib/db';
 
-// OpenAI types
 interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
-
-interface ChatCompletionResponse {
-  id: string;
-  object: string;
-  created: number;
-  model: string;
-  choices: {
-    index: number;
-    message: ChatMessage;
-    finish_reason: string;
-  }[];
-  usage: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-}
-
-interface Message {
   role: 'system' | 'user' | 'assistant';
   content: string;
   timestamp: Date;
@@ -38,26 +14,55 @@ interface ChatInterfaceProps {
   isDarkMode?: boolean;
 }
 
-export function ChatInterface({ isOpen, onClose, isDarkMode = false }: ChatInterfaceProps) {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'system',
-      content: `You are a helpful assistant that can answer questions about snag entries in the database. You can provide information about snags, their descriptions, annotations, and help users find specific entries. Today's date is ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} and the current time is ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}. Please use this information when discussing dates or times with users.`,
-      timestamp: new Date()
+// Load chat history from localStorage
+const loadChatHistory = (): ChatMessage[] => {
+  try {
+    const saved = localStorage.getItem('chatHistory');
+    if (saved) {
+      return JSON.parse(saved).map((msg: any) => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp)
+      }));
     }
-  ]);
+  } catch (err) {
+    console.error('Failed to load chat history:', err);
+  }
+  return [];
+};
+
+// Save chat history to localStorage
+const saveChatHistory = (messages: ChatMessage[]) => {
+  try {
+    localStorage.setItem('chatHistory', JSON.stringify(messages));
+  } catch (err) {
+    console.error('Failed to save chat history:', err);
+  }
+};
+
+export function ChatInterface({ isOpen, onClose, isDarkMode = false }: ChatInterfaceProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>(loadChatHistory);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 100 });
   const [size, setSize] = useState({ width: 600, height: 500 });
   const [isResizing, setIsResizing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   
+  // Voice recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcribedText, setTranscribedText] = useState<string | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const resizeStartRef = useRef({ width: 0, height: 0, x: 0, y: 0 });
+
+  const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
 
   // Set initial position after mount
   useEffect(() => {
@@ -67,7 +72,6 @@ export function ChatInterface({ isOpen, onClose, isDarkMode = false }: ChatInter
   // Handle window resize events
   useEffect(() => {
     const handleResize = () => {
-      // Keep window within viewport bounds
       setDragPosition(prev => ({
         x: Math.min(prev.x, window.innerWidth - size.width),
         y: Math.min(prev.y, window.innerHeight - size.height)
@@ -153,12 +157,83 @@ export function ChatInterface({ isOpen, onClose, isDarkMode = false }: ChatInter
     };
   };
 
+  // Handle voice recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await transcribeAudio(audioBlob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to start recording:', err);
+      setError('Failed to access microphone. Please check your permissions.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const transcribeAudio = async (audioBlob: Blob) => {
+    setIsTranscribing(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'recording.webm');
+
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to transcribe audio');
+      }
+
+      const data = await response.json();
+      // Append new transcribed text to existing input
+      const newText = data.text.trim();
+      setTranscribedText(newText);
+      setInputMessage(prev => {
+        const separator = prev.trim() ? ' ' : '';
+        return prev.trim() + separator + newText;
+      });
+    } catch (err) {
+      console.error('Transcription error:', err);
+      setError('Failed to transcribe audio. Please try again.');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  // Modified submit handler to clear transcribed text
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     
     if (!inputMessage.trim()) return;
 
-    const userMessage: Message = {
+    setTranscribedText(null); // Clear transcribed text after sending
+    const userMessage: ChatMessage = {
       role: 'user',
       content: inputMessage,
       timestamp: new Date()
@@ -170,243 +245,310 @@ export function ChatInterface({ isOpen, onClose, isDarkMode = false }: ChatInter
       setIsLoading(true);
       setError(null);
 
-      // Get database context on client side
-      console.log('🔍 Getting context for:', userMessage.content);
-      let context;
-      try {
-        context = await getSnagContext(userMessage.content);
-        console.log('📊 Retrieved context:', context);
-      } catch (dbError) {
-        console.error('Database error:', dbError);
-        throw new Error('Failed to access database. Please refresh the page and try again.');
-      }
-
-      let additionalContext = '';
-      if (context.project) {
-        additionalContext = `
-          Project "${context.project.name}" has ${context.project.totalSnags} snags.
-          Status breakdown: ${JSON.stringify(context.project.statusCounts)}
-          Locations: ${context.project.locations.join(', ')}
-        `;
-      } else if (context.snag) {
-        additionalContext = `
-          Found snag #${context.snag.snagNumber}:
-          Name: ${context.snag.name}
-          Description: ${context.snag.description}
-          Location: ${context.snag.location}
-          Status: ${context.snag.status}
-          Priority: ${context.snag.priority}
-          Assigned to: ${context.snag.assignedTo}
-          
-          Related snags in same location/status: ${context.relatedSnags.map(s => '#' + s.snagNumber).join(', ')}
-        `;
-      } else if (context.availableProjects?.length > 0) {
-        additionalContext = `Available projects: ${context.availableProjects.join(', ')}`;
-      }
-
-      // If no specific project/snag found, try general search
-      if (!additionalContext && userMessage.content.length > 0) {
-        try {
-          const searchResults = await searchSnags(userMessage.content);
-          if (searchResults.length > 0) {
-            additionalContext = `
-              Found ${searchResults.length} matching snags:
-              ${searchResults.slice(0, 5).map(s => 
-                `#${s.snagNumber} (${s.projectName}): ${s.name} - ${s.status}`
-              ).join('\n')}
-              ${searchResults.length > 5 ? `\n...and ${searchResults.length - 5} more` : ''}
-            `;
-          }
-        } catch (searchError) {
-          console.error('Search error:', searchError);
-        }
-      }
-
-      // Update system message with context
-      const updatedMessages = [...messages, userMessage].map(m => {
-        if (m.role === 'system' && additionalContext) {
-          return {
-            ...m,
-            content: `${m.content.split('\n\nContext for current query:')[0]}\n\nContext for current query:\n${additionalContext}`
-          };
-        }
-        return m;
-      });
-
-      console.log('📤 Making API request...');
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: updatedMessages
+          messages: messages.concat(userMessage).map(({ role, content }) => ({ role, content }))
         }),
       });
 
-      console.log('📥 Received response:', response);
-
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('❌ API Error:', errorData);
-        throw new Error(`API Error: ${response.status} - ${JSON.stringify(errorData)}`);
+        throw new Error(errorData.error || 'Failed to get response');
       }
 
       const data = await response.json();
-      console.log('✅ Response data:', data);
-
-      if (data.message) {
-        const assistantMessage: Message = {
-          role: 'assistant',
-          content: data.message.content,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-      }
-    } catch (error) {
-      console.error('❌ Chat error:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred');
+      
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: data.message.content,
+        timestamp: new Date()
+      }]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
     }
   }
 
+  // Save messages to localStorage whenever they change
+  useEffect(() => {
+    saveChatHistory(messages);
+  }, [messages]);
+
+  // Add clear history functionality with confirmation
+  const clearHistory = () => {
+    if (messages.length === 0) return;
+    setShowClearConfirm(true);
+  };
+
+  const confirmClear = () => {
+    setMessages([]);
+    localStorage.removeItem('chatHistory');
+    setShowClearConfirm(false);
+  };
+
+  // Add copy functionality
+  const copyToClipboard = async (text: string, messageId: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedMessageId(messageId);
+      setTimeout(() => setCopiedMessageId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
   if (!isOpen) return null;
 
-  const chat = (
+  return createPortal(
     <div 
-      className={`fixed z-[9999] rounded-lg shadow-lg ${
-        isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
+      className={`fixed z-[9999] rounded-xl shadow-2xl overflow-hidden ${
+        isDarkMode 
+          ? 'bg-black text-white border border-gray-800' 
+          : 'bg-white text-gray-900 border border-gray-200'
       }`}
       style={{
-        top: `${dragPosition.y}px`,
-        left: `${dragPosition.x}px`,
-        width: `${size.width}px`,
-        height: `${size.height}px`,
-        transform: 'none'
+        left: dragPosition.x,
+        top: dragPosition.y,
+        width: size.width,
+        height: size.height
       }}
     >
-      {/* Header */}
+      {showClearConfirm && (
+        <div className="absolute inset-0 bg-black bg-opacity-50 z-[10000] flex items-center justify-center backdrop-blur-sm">
+          <div className={`p-6 rounded-xl ${isDarkMode ? 'bg-gray-900' : 'bg-white'} shadow-2xl max-w-sm mx-4 border ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+            <h3 className="text-lg font-semibold mb-4">Clear Chat History?</h3>
+            <p className="mb-6 text-sm opacity-80">This will permanently delete all chat messages. This action cannot be undone.</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  isDarkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+                }`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmClear}
+                className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"
+              >
+                Clear History
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header - Made sticky */}
       <div 
         ref={dragRef}
-        className={`p-3 rounded-t-lg flex justify-between items-center cursor-grab active:cursor-grabbing ${
-          isDarkMode ? 'bg-gray-700' : 'bg-gray-100'
+        className={`sticky top-0 z-[10000] p-4 cursor-move flex items-center justify-between border-b shadow-sm ${
+          isDarkMode 
+            ? 'bg-gray-900 border-gray-800' 
+            : 'bg-gray-50 border-gray-200'
         }`}
         onMouseDown={handleMouseDown}
       >
-        <span className="font-medium">AI Assistant</span>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-3">
+          <GripHorizontal className="w-5 h-5 opacity-70" />
+          <span className="font-semibold text-lg">AI Assistant</span>
+          <span className="text-xs opacity-50">(Drag to move)</span>
+        </div>
+        <div className="flex items-center gap-3">
           <button
-            onClick={() => {
-              // Keep the initial system message but clear the rest
-              setMessages([messages[0]]);
-              setError(null);
-            }}
-            className={`p-1 rounded-full hover:bg-opacity-80 ${
-              isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-200'
+            onClick={clearHistory}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
+              messages.length > 0
+                ? isDarkMode
+                  ? 'hover:bg-gray-800 text-red-400 hover:text-red-300'
+                  : 'hover:bg-gray-100 text-red-500 hover:text-red-600'
+                : 'opacity-50 cursor-not-allowed'
             }`}
             title="Clear chat history"
+            disabled={messages.length === 0}
           >
-            <Trash2 className="h-5 w-5" />
+            <Trash2 className="w-4 h-4" />
+            <span className="text-sm">Clear Chat</span>
           </button>
           <button
             onClick={onClose}
-            className={`p-1 rounded-full hover:bg-opacity-80 ${
-              isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-200'
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
+              isDarkMode ? 'hover:bg-gray-800 text-red-400' : 'hover:bg-gray-100 text-red-500'
             }`}
-            title="Close chat"
+            title="Close window"
           >
-            <X className="h-5 w-5" />
+            <X className="w-4 h-4" />
+            <span className="text-sm">Close</span>
           </button>
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4" style={{ height: 'calc(100% - 120px)' }}>
-        <div className="space-y-4">
-          {messages.filter(m => m.role !== 'system').map((message, index) => (
+      {/* Messages - Adjusted for sticky header */}
+      <div 
+        className="flex-1 overflow-y-auto p-4 space-y-4" 
+        style={{ 
+          height: 'calc(100% - 180px)',
+          marginTop: 0 // Ensure no gap after sticky header
+        }}
+      >
+        {messages.map((message, index) => (
+          <div
+            key={index}
+            className={`group flex ${
+              message.role === 'user' ? 'justify-end' : 'justify-start'
+            }`}
+          >
             <div
-              key={index}
-              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`relative flex flex-col max-w-[85%] p-4 rounded-xl ${
+                message.role === 'user'
+                  ? isDarkMode
+                    ? 'bg-gray-800 text-white'
+                    : 'bg-gray-900 text-white'
+                  : isDarkMode
+                  ? 'bg-gray-900 border border-gray-800'
+                  : 'bg-gray-100'
+              }`}
             >
-              <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                  message.role === 'user'
-                    ? isDarkMode
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-blue-500 text-white'
-                    : isDarkMode
-                    ? 'bg-gray-700 text-white'
-                    : 'bg-gray-100 text-gray-900'
-                }`}
-              >
+              <div className="prose max-w-none mb-2" style={{ color: 'inherit' }}>
                 {message.content}
               </div>
-            </div>
-          ))}
-          {isLoading && (
-            <div className="flex justify-start">
-              <div className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                isDarkMode ? 'bg-gray-700' : 'bg-gray-100'
-              }`}>
-                Thinking...
+              <div className="flex items-center justify-between gap-4">
+                <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {message.timestamp.toLocaleTimeString()}
+                </div>
+                <button
+                  onClick={() => copyToClipboard(message.content, index)}
+                  className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded ${
+                    isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-200'
+                  }`}
+                  title="Copy message"
+                >
+                  {copiedMessageId === index ? (
+                    <Check className="w-4 h-4 text-green-500" />
+                  ) : (
+                    <Copy className="w-4 h-4" />
+                  )}
+                </button>
               </div>
             </div>
-          )}
-          {error && (
-            <div className="flex justify-center">
-              <div className="text-red-500 text-sm">
-                {error}
-              </div>
+          </div>
+        ))}
+        {isLoading && (
+          <div className="flex justify-center">
+            <div className={`inline-block p-4 rounded-lg ${
+              isDarkMode ? 'bg-gray-900' : 'bg-gray-100'
+            }`}>
+              <Loader2 className="w-5 h-5 animate-spin" />
             </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
+          </div>
+        )}
+        {error && (
+          <div className="text-center text-red-500 mb-4 p-3 rounded-lg border border-red-200 bg-red-50">
+            {error}
+          </div>
+        )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
-      <form 
-        onSubmit={handleSubmit}
-        className={`absolute bottom-0 left-0 right-0 p-4 border-t ${
-          isDarkMode ? 'border-gray-700' : 'border-gray-200'
-        }`}
-      >
-        <div className="flex space-x-2">
-          <input
-            type="text"
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            placeholder="Type your message..."
-            disabled={isLoading}
-            className={`flex-1 p-2 rounded-lg border ${
-              isDarkMode
-                ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
-                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
-            } focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50`}
-          />
-          <button
-            type="submit"
-            disabled={!inputMessage.trim() || isLoading}
-            className={`p-2 rounded-lg ${
-              isDarkMode
-                ? 'bg-blue-600 hover:bg-blue-700'
-                : 'bg-blue-500 hover:bg-blue-600'
-            } text-white disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            <Send className="h-5 w-5" />
-          </button>
-        </div>
-      </form>
+      <div className={`p-4 border-t ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex-1 relative">
+            <textarea
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
+              placeholder="Type a message... (Press Enter to send, Shift + Enter for new line)"
+              className={`w-full p-3 rounded-lg border resize-none ${
+                isDarkMode
+                  ? 'bg-gray-900 border-gray-800 text-white placeholder-gray-500'
+                  : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'
+              } focus:outline-none focus:ring-2 focus:ring-gray-500`}
+              style={{ minHeight: '80px' }}
+              disabled={isLoading}
+            />
+            {transcribedText && (
+              <div className={`absolute bottom-full mb-2 left-0 right-0 p-4 rounded-lg text-sm ${
+                isDarkMode ? 'bg-gray-900 border border-gray-800' : 'bg-gray-50 border border-gray-200'
+              }`}>
+                <div className="font-medium mb-2">Transcribed Text:</div>
+                <div className="opacity-80">{transcribedText}</div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between items-center">
+            <button
+              type="button"
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={isLoading || isTranscribing}
+              className={`p-3 rounded-lg transition-colors ${
+                isRecording
+                  ? 'bg-red-500 hover:bg-red-600 text-white'
+                  : isDarkMode
+                  ? 'bg-gray-800 hover:bg-gray-700'
+                  : 'bg-gray-100 hover:bg-gray-200'
+              } disabled:opacity-50 flex items-center gap-2`}
+              title={isRecording ? 'Stop recording' : 'Start recording'}
+            >
+              {isTranscribing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Transcribing...</span>
+                </>
+              ) : isRecording ? (
+                <>
+                  <MicOff className="w-4 h-4" />
+                  <span>Stop Recording</span>
+                </>
+              ) : (
+                <>
+                  <Mic className="w-4 h-4" />
+                  <span>Record Voice</span>
+                </>
+              )}
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading || !inputMessage.trim()}
+              className={`p-3 rounded-lg transition-colors flex items-center gap-2 ${
+                isDarkMode
+                  ? 'bg-white text-black hover:bg-gray-100'
+                  : 'bg-black text-white hover:bg-gray-800'
+              } disabled:opacity-50`}
+            >
+              <Send className="w-4 h-4" />
+              <span>Send Message</span>
+            </button>
+          </div>
+        </form>
+      </div>
 
-      {/* Resize handle */}
+      {/* Resize handles */}
       <div
-        className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize"
+        className={`absolute bottom-0 right-0 w-6 h-6 cursor-se-resize flex items-center justify-center ${
+          isDarkMode ? 'text-gray-600' : 'text-gray-400'
+        }`}
         onMouseDown={handleResizeStart}
       >
-        <div className="absolute bottom-1 right-1 w-2 h-2 bg-gray-400 rounded-sm" />
+        <svg width="10" height="10" viewBox="0 0 10 10">
+          <path
+            fill="currentColor"
+            d="M0 10L10 10L10 0Z"
+          />
+        </svg>
       </div>
-    </div>
+      <div className="absolute bottom-0 right-0 w-1 h-full cursor-ew-resize hover:bg-gray-400/20" />
+      <div className="absolute bottom-0 right-0 w-full h-1 cursor-ns-resize hover:bg-gray-400/20" />
+    </div>,
+    document.body
   );
-
-  return createPortal(chat, document.body);
 } 

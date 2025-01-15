@@ -5,7 +5,7 @@ import { ProjectSelector } from "@/components/ProjectSelector"
 import { UploadArea } from "@/components/UploadArea"
 import { SnagList } from "@/components/SnagList"
 import { NewProjectDialog } from "@/components/NewProjectDialog"
-import { AIVoiceAssistant } from "@/components/AIVoiceAssistant"
+import { VoiceNotesAssistant } from "@/components/AIVoiceAssistant"
 import { ChatButton } from "@/components/ChatButton"
 import { addProject } from "@/lib/db"
 
@@ -54,7 +54,7 @@ export default function Home() {
               refreshTrigger={refreshTrigger}
               isDarkMode={isDarkMode}
             />
-            <AIVoiceAssistant 
+            <VoiceNotesAssistant 
               isDarkMode={isDarkMode} 
               projectName={selectedProject}
             />

@@ -27,6 +27,8 @@ export function ProjectSelector({
 }: ProjectSelectorProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [deleteConfirmProject, setDeleteConfirmProject] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -56,36 +58,46 @@ export function ProjectSelector({
   }, [refreshTrigger]);
 
   const handleDeleteProject = async (projectId: string) => {
-    await deleteProject(projectId);
+    setIsDeleting(true);
+    setError(null);
     
-    // Update local state
-    const project = await getProject(projectId);
-    if (project && selectedProject === project.name) {
-      onProjectSelect('');
+    try {
+      // Get project details before deletion
+      const project = await getProject(projectId);
+      if (project && selectedProject === project.name) {
+        onProjectSelect('');
+      }
+      
+      await deleteProject(projectId);
+      setDeleteConfirmProject(null);
+      
+      // Refresh projects list
+      const updatedProjects = await getAllProjects();
+      const snags = await getAllSnags();
+      
+      // Count snags per project
+      const snagCounts = snags.reduce((acc, snag) => {
+        const count = (acc.get(snag.projectName) || 0) + 1;
+        acc.set(snag.projectName, count);
+        return acc;
+      }, new Map<string, number>());
+
+      // Update projects with counts
+      const projectsWithCounts = updatedProjects
+        .map(project => ({
+          id: project.id,
+          name: project.name,
+          count: snagCounts.get(project.name) || 0
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      setProjects(projectsWithCounts);
+    } catch (error) {
+      console.error('Failed to delete project:', error);
+      setError('Failed to delete project. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
-    setDeleteConfirmProject(null);
-    
-    // Refresh projects list
-    const updatedProjects = await getAllProjects();
-    const snags = await getAllSnags();
-    
-    // Count snags per project
-    const snagCounts = snags.reduce((acc, snag) => {
-      const count = (acc.get(snag.projectName) || 0) + 1;
-      acc.set(snag.projectName, count);
-      return acc;
-    }, new Map<string, number>());
-
-    // Update projects with counts
-    const projectsWithCounts = updatedProjects
-      .map(project => ({
-        id: project.id,
-        name: project.name,
-        count: snagCounts.get(project.name) || 0
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    setProjects(projectsWithCounts);
   };
 
   return (
@@ -112,6 +124,16 @@ export function ProjectSelector({
       </div>
       
       <div className="space-y-2">
+        {error && (
+          <div className={`p-3 rounded-lg text-sm ${
+            isDarkMode 
+              ? 'bg-red-900/20 text-red-400 border border-red-800' 
+              : 'bg-red-50 text-red-600 border border-red-200'
+          }`}>
+            {error}
+          </div>
+        )}
+        
         {projects.length === 0 ? (
           <div className={`text-sm text-center py-6 rounded-lg border-2 border-dashed transition-colors duration-300 ${
             isDarkMode 
@@ -184,25 +206,59 @@ export function ProjectSelector({
                     isDarkMode ? 'bg-[#1a1f2e] text-zinc-100' : 'bg-white text-gray-900'
                   }`}>
                     <h3 className="text-lg font-semibold">Delete Project</h3>
-                    <p className={`${
+                    <div className={`space-y-3 ${
                       isDarkMode ? 'text-zinc-400' : 'text-gray-600'
                     }`}>
-                      Are you sure you want to delete "{project.name}"? This will permanently delete the project and all its {project.count} entries.
-                    </p>
+                      <p>
+                        Are you sure you want to delete "{project.name}"? This action cannot be undone.
+                      </p>
+                      <div className={`p-3 rounded-lg text-sm ${
+                        isDarkMode 
+                          ? 'bg-yellow-900/20 text-yellow-400 border border-yellow-800' 
+                          : 'bg-yellow-50 text-yellow-600 border border-yellow-200'
+                      }`}>
+                        <p>This will permanently delete:</p>
+                        <ul className="list-disc ml-4 mt-1">
+                          <li>The project and all its settings</li>
+                          <li>All entries in this project</li>
+                          <li>All voice recordings associated with this project</li>
+                          <li>All annotations and comments</li>
+                        </ul>
+                      </div>
+                    </div>
                     <div className="flex justify-end gap-3 pt-2">
                       <Button
                         variant="ghost"
-                        onClick={() => setDeleteConfirmProject(null)}
+                        onClick={() => {
+                          setDeleteConfirmProject(null);
+                          setError(null);
+                        }}
+                        disabled={isDeleting}
                         className={isDarkMode ? 'text-zinc-300 hover:bg-[#252b3b] hover:text-zinc-100' : 'hover:bg-gray-100'}
                       >
                         Cancel
                       </Button>
                       <Button
                         variant="destructive"
-                        onClick={() => handleDeleteProject(project.id)}
-                        className="hover:bg-red-700 transition-colors duration-300"
+                        onClick={() => {
+                          const project = projects.find(p => p.name === deleteConfirmProject);
+                          if (project) {
+                            handleDeleteProject(project.id);
+                          }
+                        }}
+                        disabled={isDeleting}
+                        className={`hover:bg-red-700 transition-colors duration-300 ${
+                          isDeleting ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
                       >
-                        Delete Project
+                        {isDeleting ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Deleting...
+                          </div>
+                        ) : (
+                          'Delete Project'
+                        )}
                       </Button>
                     </div>
                   </Card>

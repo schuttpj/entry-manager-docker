@@ -5,6 +5,13 @@ import { saveVoiceRecording, getVoiceRecordingsByProject, getVoiceRecording, get
 import { useOpenAI } from '@/hooks/use-openai';
 import { transcribeAudio } from '@/lib/openai';
 import { createPortal } from 'react-dom';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import ReactMarkdown from 'react-markdown';
 
 interface TranscriptionPopupProps {
   isOpen: boolean;
@@ -159,8 +166,24 @@ function TranscriptionPopup({ isOpen, onClose, transcription, isDarkMode }: Tran
                 Generating summary...
               </div>
             ) : summary ? (
-              <div className={`prose ${isDarkMode ? 'prose-invert' : ''} max-w-none`}
-                   dangerouslySetInnerHTML={{ __html: summary }} />
+              <div className={`prose ${isDarkMode ? 'prose-invert' : ''} max-w-none 
+                prose-headings:mb-3 prose-headings:mt-4 
+                prose-h1:text-xl prose-h1:font-bold 
+                prose-h2:text-lg prose-h2:font-semibold 
+                prose-p:my-2 prose-ul:my-2 
+                prose-ul:list-disc prose-ul:pl-4
+                ${isDarkMode ? 'prose-headings:text-white prose-p:text-gray-300' : 'prose-headings:text-gray-900 prose-p:text-gray-600'}
+              `}>
+                <ReactMarkdown
+                  components={{
+                    h1: ({node, ...props}) => <h1 className="border-b pb-2 mb-4" {...props} />,
+                    ul: ({node, ...props}) => <ul className="space-y-2" {...props} />,
+                    li: ({node, ...props}) => <li className="flex items-start" {...props} />
+                  }}
+                >
+                  {summary}
+                </ReactMarkdown>
+              </div>
             ) : (
               <div className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                 No summary available
@@ -194,7 +217,7 @@ interface AIVoiceAssistantProps {
   projectName: string;
 }
 
-export function AIVoiceAssistant({ isDarkMode = false, projectName }: AIVoiceAssistantProps) {
+export function VoiceNotesAssistant({ isDarkMode = false, projectName }: AIVoiceAssistantProps) {
   const { isAvailable: isAIAvailable } = useOpenAI();
   const [showInfo, setShowInfo] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -542,18 +565,34 @@ export function AIVoiceAssistant({ isDarkMode = false, projectName }: AIVoiceAss
           <h3 className={`text-sm font-medium transition-colors duration-300 ${
             isDarkMode ? 'text-white' : 'text-gray-900'
           }`}>
-            AI Voice Assistant
+            Voice Notes
           </h3>
-          <button
-            onClick={() => setShowInfo(!showInfo)}
-            className={`p-1 rounded-full transition-colors duration-300 ${
-              isDarkMode 
-                ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-300' 
-                : 'hover:bg-gray-100 text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Info className="w-4 h-4" />
-          </button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setShowInfo(!showInfo)}
+                >
+                  <Info className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[300px] p-4">
+                <p className="text-sm">
+                  Voice Notes Assistant helps you create and manage voice notes:
+                  <ul className="list-disc pl-4 mt-2">
+                    <li>Click to start/stop recording your voice note</li>
+                    <li>Your recording will be automatically transcribed</li>
+                    <li>AI will generate a concise summary of your note</li>
+                    <li>Access both transcription and summary by clicking the AI icon</li>
+                    <li>Perfect for quick thoughts, reminders, and meeting notes</li>
+                  </ul>
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
         {isRecording && (
           <span className={`text-sm font-medium ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>
@@ -567,20 +606,6 @@ export function AIVoiceAssistant({ isDarkMode = false, projectName }: AIVoiceAss
           isDarkMode ? 'bg-red-900/20 text-red-200' : 'bg-red-50 text-red-800'
         }`}>
           {error}
-        </div>
-      )}
-
-      {showInfo && (
-        <div className={`mb-4 p-3 rounded-lg text-sm transition-colors duration-300 ${
-          isDarkMode ? 'bg-gray-700/50 text-gray-300' : 'bg-gray-50 text-gray-600'
-        }`}>
-          <p className="mb-2">Use voice commands to update entry information:</p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li>"Update entry number [X] priority to high"</li>
-            <li>"Set status of entry [X] to in progress"</li>
-            <li>"Assign entry [X] to John"</li>
-            <li>"Add description to entry [X]: [your description]"</li>
-          </ul>
         </div>
       )}
 
@@ -608,7 +633,7 @@ export function AIVoiceAssistant({ isDarkMode = false, projectName }: AIVoiceAss
         ) : (
           <>
             <Mic className="w-4 h-4" />
-            <span>Click to Speak</span>
+            <span>Record Note</span>
           </>
         )}
       </Button>
@@ -619,7 +644,7 @@ export function AIVoiceAssistant({ isDarkMode = false, projectName }: AIVoiceAss
           <h4 className={`text-sm font-medium mb-2 transition-colors duration-300 ${
             isDarkMode ? 'text-gray-300' : 'text-gray-700'
           }`}>
-            Recent Recordings
+            Recent Notes
           </h4>
           <div className="space-y-2">
             {recordings.map((recording) => (

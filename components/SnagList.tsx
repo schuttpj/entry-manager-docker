@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { getSnagsByProject, deleteSnag, updateSnag, updateSnagAnnotations, getSnag } from '@/lib/db';
+import { getSnagsByProject, deleteSnag, updateSnag, updateSnagAnnotations } from '@/lib/db';
 import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare, AlertCircle, Calendar, Grid, List } from 'lucide-react';
 import { format } from 'date-fns';
 import { Annotation, Snag } from '@/types/snag';
@@ -54,6 +54,7 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
   const [snags, setSnags] = useState<Snag[]>([]);
   const [filteredSnags, setFilteredSnags] = useState<Snag[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState(Date.now());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedSnags, setSelectedSnags] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -127,15 +128,16 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
       try {
         setLoading(true);
         setError(null);
+        console.log('🔄 Auto-refreshing snag list...');
         const loadedSnags = await getSnagsByProject(projectName);
-        console.log('Loaded snags with annotations:', loadedSnags);
+        console.log('📋 Loaded snags:', loadedSnags.length);
         const snagWithAnnotations = loadedSnags.map(snag => ({
           ...snag,
           annotations: snag.annotations || []
         }));
         setSnags(snagWithAnnotations);
       } catch (error) {
-        console.error('Failed to load snags:', error);
+        console.error('❌ Failed to load snags:', error);
         setError('Failed to load entries. Please try refreshing the page.');
       } finally {
         setLoading(false);
@@ -143,7 +145,13 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
     };
 
     loadSnags();
-  }, [projectName, refreshTrigger]);
+  }, [projectName, refreshTrigger, lastUpdate]);
+
+  // Function to trigger refresh
+  const refreshList = () => {
+    console.log('🔄 Manual refresh triggered');
+    setLastUpdate(Date.now());
+  };
 
   // Filter and sort snags
   useEffect(() => {
@@ -189,19 +197,30 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
   }, [snags, searchTerm, sortBy]);
 
   const handleDelete = async (id: string) => {
-    // Optimistically remove the snag
+    console.log('🗑️ Starting deletion process in SnagList for snag:', id);
+    
     const snagToDelete = snags.find(s => s.id === id);
+    console.log('📋 Snag to be deleted:', {
+      id: snagToDelete?.id,
+      name: snagToDelete?.name,
+      projectName: snagToDelete?.projectName,
+      snagNumber: snagToDelete?.snagNumber
+    });
+    
     setSnags(snags.filter(snag => snag.id !== id));
     setDeleteConfirmId(null);
 
     try {
+      console.log('💾 Calling database delete operation...');
       await deleteSnag(id);
-      // Trigger refresh after successful deletion
-      handleUploadComplete();
+      console.log('✅ Snag successfully deleted from database');
+      
+      // Trigger auto-refresh after deletion
+      refreshList();
     } catch (error) {
-      console.error('Failed to delete snag:', error);
-      // Revert the optimistic update
+      console.error('❌ Failed to delete snag:', error);
       if (snagToDelete) {
+        console.log('⚠️ Reverting optimistic update...');
         setSnags(prev => [...prev, snagToDelete]);
       }
       setError('Failed to delete entry. Please try again.');
@@ -237,13 +256,9 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
   };
 
   const saveChanges = async (snag: Snag) => {
-    // Store the original snag state
     const originalSnag = { ...snag };
-    
-    // Create date object from the editState date
     const observationDate = new Date(editState.observationDate);
     
-    // Optimistically update the UI
     setSnags(snags.map(s => 
       s.id === snag.id 
         ? { 
@@ -258,7 +273,6 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
     setEditingId(null);
 
     try {
-      // Convert dates to the correct format for the database
       const updateData = {
         description: editState.description,
         priority: editState.priority,
@@ -271,11 +285,10 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
       };
 
       await updateSnag(snag.id, updateData);
-      // Trigger a refresh to ensure UI is in sync with database
-      handleUploadComplete();
+      // Trigger auto-refresh after update
+      refreshList();
     } catch (error) {
       console.error('Failed to update snag:', error);
-      // Revert the optimistic update
       setSnags(snags.map(s => 
         s.id === snag.id ? originalSnag : s
       ));

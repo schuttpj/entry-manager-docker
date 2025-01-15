@@ -26,6 +26,7 @@ interface SnagListDB extends DBSchema {
     indexes: {
       'by-project': string;
       'by-project-snagNumber': [string, number];
+      'by-snagNumber': number;
     };
   };
   projects: {
@@ -72,7 +73,7 @@ export async function getDB(): Promise<IDBPDatabase<SnagListDB>> {
   console.log('🔄 Initializing database connection...');
   
   try {
-    dbInstance = await openDB<SnagListDB>('snaglist-db', 2, {
+    dbInstance = await openDB<SnagListDB>('snaglist-db', 3, {
       async upgrade(db, oldVersion, newVersion) {
         console.log('🔧 Running database upgrade...', { oldVersion, newVersion });
         
@@ -81,59 +82,60 @@ export async function getDB(): Promise<IDBPDatabase<SnagListDB>> {
           if (db.objectStoreNames.contains('snags')) {
             db.deleteObjectStore('snags');
           }
+          if (db.objectStoreNames.contains('projects')) {
+            db.deleteObjectStore('projects');
+          }
+          if (db.objectStoreNames.contains('voiceRecordings')) {
+            db.deleteObjectStore('voiceRecordings');
+          }
         }
         
         // Create stores with new schema
-        if (!db.objectStoreNames.contains('snags')) {
-          console.log('📝 Creating snags store...');
-          const store = db.createObjectStore('snags', { keyPath: 'id' });
-          store.createIndex('by-project', 'projectName');
-          store.createIndex('by-project-snagNumber', ['projectName', 'snagNumber'], { unique: true });
-        }
+        console.log('📝 Creating stores...');
+        const snagStore = db.createObjectStore('snags', { keyPath: 'id' });
+        snagStore.createIndex('by-project', 'projectName');
+        snagStore.createIndex('by-project-snagNumber', ['projectName', 'snagNumber'], { unique: true });
+        snagStore.createIndex('by-snagNumber', 'snagNumber', { unique: false });
 
-        if (!db.objectStoreNames.contains('projects')) {
-          console.log('📝 Creating projects store...');
-          const store = db.createObjectStore('projects', { keyPath: 'id' });
-          store.createIndex('by-name', 'name', { unique: false });
-        }
+        const projectStore = db.createObjectStore('projects', { keyPath: 'id' });
+        projectStore.createIndex('by-name', 'name', { unique: false });
 
-        if (!db.objectStoreNames.contains('voiceRecordings')) {
-          console.log('📝 Creating voice recordings store...');
-          const store = db.createObjectStore('voiceRecordings', { keyPath: 'id' });
-          store.createIndex('by-project', 'projectName');
-        }
+        const voiceStore = db.createObjectStore('voiceRecordings', { keyPath: 'id' });
+        voiceStore.createIndex('by-project', 'projectName');
 
         // Add sample data using the version change transaction
         const projectId = crypto.randomUUID();
         const now = new Date();
 
         try {
-          const projectStore = db.transaction('projects', 'readwrite', { durability: 'relaxed' }).objectStore('projects');
+          // Add project using the existing transaction
           await projectStore.add({
             id: projectId,
-            name: 'james',
+            name: 'Sample Project',
             createdAt: now,
             updatedAt: now
           });
 
-          const snagStore = db.transaction('snags', 'readwrite', { durability: 'relaxed' }).objectStore('snags');
+          // Add sample snag using the existing transaction
           await snagStore.add({
             id: crypto.randomUUID(),
-            projectName: 'james',
+            projectName: 'Sample Project',
             snagNumber: 1,
-            name: 'Kitchen Design',
-            description: 'A detailed sketch illustrates a modern kitchen featuring sleek cabinets, a central island, and integrated appliances',
-            photoPath: 'path/to/photo1.jpg',
+            name: 'Sample Entry',
+            description: 'This is a sample entry to demonstrate the application functionality.',
+            photoPath: '/placeholder.jpg',
             priority: 'Medium' as const,
-            assignedTo: 'Alice Johnson',
+            assignedTo: 'Demo User',
             status: 'In Progress' as const,
-            location: 'Kitchen',
+            location: 'General',
             createdAt: now,
             updatedAt: now,
             completionDate: null,
             observationDate: now,
             annotations: []
           });
+
+          console.log('✅ Sample data added successfully');
         } catch (error) {
           console.error('❌ Error adding sample data:', error);
         }
@@ -180,8 +182,64 @@ export async function getProject(id: string) {
 }
 
 export async function deleteProject(id: string) {
-  const db = await getDB();
-  await db.delete('projects', id);
+  console.log('🗑️ Starting to delete project:', id);
+  
+  try {
+    const db = await getDB();
+    
+    // Get project details before deletion
+    const project = await db.get('projects', id);
+    if (!project) {
+      console.warn('⚠️ Attempted to delete non-existent project:', id);
+      return;
+    }
+    
+    console.log('📋 Found project to delete:', {
+      id: project.id,
+      name: project.name
+    });
+
+    // Start a transaction that includes all stores we need to modify
+    const tx = db.transaction(['projects', 'snags', 'voiceRecordings'], 'readwrite');
+    
+    try {
+      // Delete all snags associated with the project
+      const snagIndex = tx.objectStore('snags').index('by-project');
+      const snags = await snagIndex.getAllKeys(project.name);
+      console.log(`🗑️ Deleting ${snags.length} snags for project:`, project.name);
+      
+      for (const snagId of snags) {
+        await tx.objectStore('snags').delete(snagId);
+      }
+      
+      // Delete all voice recordings associated with the project
+      const voiceIndex = tx.objectStore('voiceRecordings').index('by-project');
+      const recordings = await voiceIndex.getAllKeys(project.name);
+      console.log(`🗑️ Deleting ${recordings.length} voice recordings for project:`, project.name);
+      
+      for (const recordingId of recordings) {
+        await tx.objectStore('voiceRecordings').delete(recordingId);
+      }
+      
+      // Finally delete the project itself
+      await tx.objectStore('projects').delete(id);
+      
+      // Commit the transaction
+      await tx.done;
+      console.log('✅ Successfully deleted project and all associated data');
+    } catch (error) {
+      console.error('❌ Transaction failed:', error);
+      throw error;
+    }
+  } catch (error: any) {
+    console.error('❌ Error deleting project:', error);
+    console.error('📄 Error details:', {
+      message: error?.message || 'Unknown error',
+      stack: error?.stack || 'No stack trace',
+      name: error?.name || 'Unknown error type'
+    });
+    throw error;
+  }
 }
 
 // Snag operations
@@ -219,36 +277,53 @@ export async function addSnag({
   completionDate?: Date | null;
   observationDate?: Date;
 }) {
-  const db = await getDB();
-  const id = crypto.randomUUID();
-  const now = new Date();
+  console.log('📝 Starting to add new snag...');
+  console.log('📋 Snag details:', { projectName, name, description, photoPath, priority, assignedTo, status, location });
+  
+  try {
+    const db = await getDB();
+    const id = crypto.randomUUID();
+    const now = new Date();
 
-  // Get the highest snag number for this project and increment
-  const index = db.transaction('snags').store.index('by-project');
-  const snags = await index.getAll(projectName);
-  const maxSnagNumber = snags.reduce((max, snag) => Math.max(max, snag.snagNumber), 0);
-  const snagNumber = maxSnagNumber + 1;
+    // Get the highest snag number for this project and increment
+    console.log('🔢 Getting highest snag number for project:', projectName);
+    const index = db.transaction('snags').store.index('by-project');
+    const snags = await index.getAll(projectName);
+    const maxSnagNumber = snags.reduce((max, snag) => Math.max(max, snag.snagNumber), 0);
+    const snagNumber = maxSnagNumber + 1;
+    console.log('📊 Generated snag number:', snagNumber);
 
-  const snag = {
-    id,
-    projectName,
-    snagNumber,
-    name,
-    description,
-    photoPath,
-    priority,
-    assignedTo,
-    status,
-    location,
-    createdAt: now,
-    updatedAt: now,
-    completionDate,
-    observationDate,
-    annotations: []
-  };
+    const snag = {
+      id,
+      projectName,
+      snagNumber,
+      name,
+      description,
+      photoPath,
+      priority,
+      assignedTo,
+      status,
+      location,
+      createdAt: now,
+      updatedAt: now,
+      completionDate,
+      observationDate,
+      annotations: []
+    };
 
-  await db.add('snags', snag);
-  return snag;
+    console.log('💾 Adding snag to database...');
+    await db.add('snags', snag);
+    console.log('✅ Successfully added snag:', { id, snagNumber, projectName });
+    return snag;
+  } catch (error: any) {
+    console.error('❌ Error adding snag:', error);
+    console.error('📄 Error details:', {
+      message: error?.message || 'Unknown error',
+      stack: error?.stack || 'No stack trace',
+      name: error?.name || 'Unknown error type'
+    });
+    throw error;
+  }
 }
 
 export async function updateSnag(id: string, updates: Partial<Omit<SnagListDB['snags']['value'], 'id' | 'snagNumber'>>) {
@@ -271,8 +346,37 @@ export async function updateSnag(id: string, updates: Partial<Omit<SnagListDB['s
 }
 
 export async function deleteSnag(id: string) {
-  const db = await getDB();
-  await db.delete('snags', id);
+  console.log('🗑️ Starting to delete snag:', id);
+  
+  try {
+    const db = await getDB();
+    
+    // Get the snag details before deletion for logging
+    const snag = await db.get('snags', id);
+    console.log('📋 Found snag to delete:', snag ? {
+      id: snag.id,
+      projectName: snag.projectName,
+      snagNumber: snag.snagNumber,
+      name: snag.name
+    } : 'No snag found');
+
+    if (!snag) {
+      console.warn('⚠️ Attempted to delete non-existent snag:', id);
+      return;
+    }
+
+    console.log('🗑️ Deleting snag from database...');
+    await db.delete('snags', id);
+    console.log('✅ Successfully deleted snag:', id);
+  } catch (error: any) {
+    console.error('❌ Error deleting snag:', error);
+    console.error('📄 Error details:', {
+      message: error?.message || 'Unknown error',
+      stack: error?.stack || 'No stack trace',
+      name: error?.name || 'Unknown error type'
+    });
+    throw error;
+  }
 }
 
 // Voice recording operations
@@ -354,9 +458,12 @@ export async function getSnagContext(query: string) {
     context.availableProjects = projects.map(p => p.name);
 
     // If no project specified but snag number is, search in all projects
-    if (snagNumber && !projectName) {
-      const allSnags = await getAllSnags();
-      context.snag = allSnags.find(s => s.snagNumber === snagNumber);
+    if (snagNumber) {
+      // Use the by-snagNumber index to find the snag
+      const index = db.transaction('snags', 'readonly').store.index('by-snagNumber');
+      const snags = await index.getAll(snagNumber);
+      context.snag = snags[0]; // Take the first match if multiple exist
+      
       if (context.snag) {
         const projectSnags = await getSnagsByProject(context.snag.projectName);
         context.relatedSnags = projectSnags.filter(s => 
@@ -371,7 +478,10 @@ export async function getSnagContext(query: string) {
       context.totalSnags = projectSnags.length;
       
       if (snagNumber) {
-        context.snag = projectSnags.find(s => s.snagNumber === snagNumber);
+        // Use the composite index when we have both project name and snag number
+        const index = db.transaction('snags', 'readonly').store.index('by-project-snagNumber');
+        context.snag = await index.get([projectName, snagNumber]);
+        
         if (context.snag) {
           // Get related snags (same location or status)
           context.relatedSnags = projectSnags.filter(s => 
@@ -394,7 +504,7 @@ export async function getSnagContext(query: string) {
         };
       }
     }
-    
+
     return context;
   } catch (error) {
     console.error('Error getting snag context:', error);

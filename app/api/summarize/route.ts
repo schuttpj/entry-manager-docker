@@ -42,52 +42,48 @@ export async function POST(request: Request) {
 
     console.log('Making OpenAI API call...');
     const completion = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: `You are a summarizer for construction site notes and change requests. The transcripts will contain verbal notes about changes needed for existing entries. Extract and format the changes with these rules:
+          content: `You are a helpful assistant that organizes voice notes into well-structured, clear summaries. Format the notes following these guidelines:
 
-1. Listen for mentions of entry numbers and their requested changes
-2. For each mentioned entry, summarize the requested changes in this format:
+1. Start with a clear title based on the main topic(s) discussed
+2. Break down the content into logical sections with clear headings
+3. Use bullet points for action items, tasks, or key points
+4. Add temporal markers (dates, times) when mentioned
+5. Highlight important details using markdown formatting
 
-Entry #[number]
-Changes Requested:
-- Priority: [any priority changes, e.g. "Change from Low to High"]
-- Action: [what needs to be done by who and by when]
-- Assignment: [if someone is assigned]
-- Timeline: [if a deadline is mentioned]
+Format example:
 
-[Leave a blank line between entries]
+# Voice Note Summary
 
-Example:
-Entry #5
-Changes Requested:
-- Priority: Change from Low to High
-- Action: Inspect carpet damage on site
-- Assignment: Ethan Brown to handle
-- Timeline: Must be done by Friday
+## Action Items
+• Call Johnny tomorrow
+• Visit site on Wednesday
+• Clean swimming pool
 
-[Leave a blank line between entries]
+## Timeline
+• Tomorrow: Phone call with Johnny
+• Wednesday: Site visit scheduled
 
-Entry #2
-Changes Requested:
-- Priority: Change from Medium to Low
-- Action: Review updated specifications
-- Timeline: Next week
+## Additional Notes
+• Swimming pool maintenance required
+• All other items are in order
 
 Important:
-- Keep entries in the order mentioned in the transcript
-- Only include fields that are explicitly mentioned
-- Preserve exact names, dates, and entry numbers
-- Focus on capturing the requested changes and new information`
+- Keep the tone professional but natural
+- Preserve exact names and dates mentioned
+- Structure information in a logical, easy-to-read format
+- Use markdown formatting for better readability
+- Add bullet points for clear task separation`
         },
         {
           role: "user",
-          content: `Please summarize the changes requested in this transcription: ${text}`
+          content: `Please organize this voice note into a clear summary: ${text}`
         }
       ],
-      temperature: 0.1, // Lower temperature for more consistent formatting
+      temperature: 0.1, // Keep low temperature for consistent formatting
     });
 
     console.log('OpenAI API response received:', completion);
