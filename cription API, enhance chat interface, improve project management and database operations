@@ -1,0 +1,13 @@
+ app/api/chat/route.ts           |   70 [32m++[m[31m-[m
+ app/api/generate-name/route.ts  |    2 [32m+[m[31m-[m
+ app/api/summarize/route.ts      |   56 [32m+[m[31m-[m
+ app/api/transcribe/route.ts     |   53 [32m++[m
+ app/page.tsx                    |    4 [32m+[m[31m-[m
+ components/AIVoiceAssistant.tsx |   85 [32m++[m[31m-[m
+ components/ChatInterface.tsx    |  568 [32m++++++++++[m[31m-------[m
+ components/ProjectSelector.tsx  |  124 [32m++[m[31m--[m
+ components/SnagList.tsx         |   47 [32m+[m[31m-[m
+ lib/db.ts                       |  238 [32m++++++[m[31m--[m
+ package-lock.json               | 1292 [32m+++++++++++++++++++++++++++++++++++++[m[31m--[m
+ package.json                    |    1 [32m+[m
+ 12 files changed, 2068 insertions(+), 472 deletions(-)

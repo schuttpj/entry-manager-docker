@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
+import BackupManager from "@/components/BackupManager"
 
 export default function SettingsPage() {
   const [systemPrompt, setSystemPrompt] = useState("")
@@ -24,32 +25,47 @@ export default function SettingsPage() {
   return (
     <div className="container mx-auto py-10">
       <h1 className="text-3xl font-bold mb-6">Evaluation Settings</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>System Prompt Configuration</CardTitle>
-          <CardDescription>
-            Set the system prompt for the AI summarizer. This will affect how meeting summaries are generated.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit}>
-            <div className="grid w-full items-center gap-4">
-              <div className="flex flex-col space-y-1.5">
-                <Label htmlFor="systemPrompt">System Prompt</Label>
-                <Input
-                  id="systemPrompt"
-                  placeholder="Enter your system prompt here..."
-                  value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                />
+      
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>System Prompt Configuration</CardTitle>
+            <CardDescription>
+              Set the system prompt for the AI summarizer. This will affect how meeting summaries are generated.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit}>
+              <div className="grid w-full items-center gap-4">
+                <div className="flex flex-col space-y-1.5">
+                  <Label htmlFor="systemPrompt">System Prompt</Label>
+                  <Input
+                    id="systemPrompt"
+                    placeholder="Enter your system prompt here..."
+                    value={systemPrompt}
+                    onChange={(e) => setSystemPrompt(e.target.value)}
+                  />
+                </div>
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <Button type="submit">Save Settings</Button>
+                </motion.div>
               </div>
-              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button type="submit">Save Settings</Button>
-              </motion.div>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Data Management</CardTitle>
+            <CardDescription>
+              Backup and restore your snag list data. Regular backups are recommended to prevent data loss.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <BackupManager />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

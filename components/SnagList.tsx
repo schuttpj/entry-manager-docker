@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { getSnagsByProject, deleteSnag, updateSnag, updateSnagAnnotations } from '@/lib/db';
-import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare, AlertCircle, Calendar, Grid, List } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { getSnagsByProject, deleteSnag, updateSnag, updateSnagAnnotations, createBackup, downloadBackupFile, restoreFromBackup } from '@/lib/db';
+import { Trash2, Save, X, Search, SortDesc, Maximize2, MessageSquare, AlertCircle, Calendar, Grid, List, Database, Upload } from 'lucide-react';
 import { format } from 'date-fns';
 import { Annotation, Snag } from '@/types/snag';
 import ImageAnnotator from './ImageAnnotator';
@@ -49,6 +49,9 @@ interface SnagListProps {
 }
 
 type SortOption = 'newest' | 'oldest' | 'priority' | 'status' | 'entry-asc' | 'entry-desc';
+
+const BACKUP_REMINDER_INTERVAL = 30 * 60 * 1000; // 30 minutes in milliseconds
+const LAST_BACKUP_KEY = 'lastBackupTime';
 
 export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, handleUploadComplete }: SnagListProps) {
   const [snags, setSnags] = useState<Snag[]>([]);
@@ -449,6 +452,83 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
     triggerConfetti(); // Trigger the confetti effect
   };
 
+  const handleBackupClick = useCallback(async () => {
+    const shouldBackup = await new Promise<boolean>((resolve) => {
+      toast.custom((t) => (
+        <div className="flex items-center gap-4 p-4 bg-white rounded-lg shadow-lg">
+          <p className="text-sm">Create backup?</p>
+          <div className="flex gap-2">
+            <Button 
+              size="sm" 
+              variant="ghost"
+              onClick={() => {
+                toast.dismiss(t);
+                resolve(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              size="sm"
+              onClick={() => {
+                toast.dismiss(t);
+                resolve(true);
+              }}
+            >
+              Backup
+            </Button>
+          </div>
+        </div>
+      ));
+    });
+
+    if (!shouldBackup) return;
+
+    try {
+      setLoading(true);
+      const backup = await createBackup();
+      downloadBackupFile(backup);
+      localStorage.setItem(LAST_BACKUP_KEY, String(Date.now()));
+      toast.success('Backup created successfully!');
+    } catch (error) {
+      console.error('Backup failed:', error);
+      toast.error('Failed to create backup');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Add backup reminder check
+  useEffect(() => {
+    const checkBackupReminder = () => {
+      const lastBackup = localStorage.getItem(LAST_BACKUP_KEY);
+      const now = Date.now();
+      
+      if (!lastBackup || (now - Number(lastBackup)) > BACKUP_REMINDER_INTERVAL) {
+        const minutesPassed = lastBackup ? Math.floor((now - Number(lastBackup)) / (60 * 1000)) : 0;
+        const timeMessage = lastBackup 
+          ? `It has been ${minutesPassed} minutes since your last backup.`
+          : 'You haven\'t created a backup yet.';
+          
+        toast('Backup Reminder', {
+          description: `${timeMessage} Consider backing up your data to prevent any loss.`,
+          action: {
+            label: 'Backup Now',
+            onClick: handleBackupClick
+          }
+        });
+      }
+    };
+
+    // Check on component mount and when project changes
+    checkBackupReminder();
+
+    // Also set up a periodic check
+    const intervalId = setInterval(checkBackupReminder, BACKUP_REMINDER_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, [projectName, handleBackupClick]);
+
   if (loading) {
     return (
       <div className={`rounded-lg shadow transition-colors duration-300 ${
@@ -489,44 +569,19 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
 
   return (
     <div className="space-y-4">
-      {/* Header with Search and Controls */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex-1 flex items-center gap-4">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              type="text"
               placeholder="Search entries..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`pl-10 ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white'}`}
+              className="pl-8"
             />
           </div>
-          {filteredSnags.length > 0 && (
-            <div
-              onClick={() => {
-                const allSelected = filteredSnags.length === selectedSnags.size;
-                if (allSelected) {
-                  setSelectedSnags(new Set());
-                } else {
-                  setSelectedSnags(new Set(filteredSnags.map(snag => snag.id)));
-                }
-              }}
-              className={`inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-md border transition-colors cursor-pointer
-                ${isDarkMode 
-                  ? 'border-gray-700 hover:bg-gray-800' 
-                  : 'border-gray-200 hover:bg-gray-50'}`}
-            >
-              <Checkbox 
-                checked={filteredSnags.length > 0 && filteredSnags.length === selectedSnags.size}
-                className="h-4 w-4 mr-2"
-              />
-              Select All
-            </div>
-          )}
-          <Select value={sortBy} onValueChange={(value: SortOption) => setSortBy(value)}>
-            <SelectTrigger className={`w-[180px] ${isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white'}`}>
-              <SortDesc className="h-4 w-4 mr-2" />
+          <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+            <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Sort by" />
             </SelectTrigger>
             <SelectContent>
@@ -534,38 +589,82 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
               <SelectItem value="oldest">Oldest First</SelectItem>
               <SelectItem value="priority">By Priority</SelectItem>
               <SelectItem value="status">By Status</SelectItem>
-              <SelectItem value="entry-asc">Entry Number (Ascending)</SelectItem>
-              <SelectItem value="entry-desc">Entry Number (Descending)</SelectItem>
+              <SelectItem value="entry-asc">Entry # (Ascending)</SelectItem>
+              <SelectItem value="entry-desc">Entry # (Descending)</SelectItem>
             </SelectContent>
           </Select>
-          <ToggleGroup type="single" value={viewMode} onValueChange={(value: 'list' | 'grid') => {
-            if (value) {
-              setViewMode(value);
-              if (value === 'grid') {
-                setIsGridViewOpen(true);
-              }
-            }
-          }}>
-            <ToggleGroupItem value="list" aria-label="List View">
-              <List className="h-4 w-4" />
-            </ToggleGroupItem>
-            <ToggleGroupItem value="grid" aria-label="Grid View">
-              <Grid className="h-4 w-4" />
-            </ToggleGroupItem>
-          </ToggleGroup>
         </div>
+
         <div className="flex items-center gap-2">
+          <div className="flex border rounded-md">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleBackupClick}
+              title="Backup Data"
+              className="rounded-l-md rounded-r-none border-r"
+            >
+              <Database className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = async (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0];
+                  if (!file) return;
+                  
+                  if (!window.confirm('Restoring will replace all current data. Are you sure you want to continue?')) {
+                    return;
+                  }
+
+                  try {
+                    const backupData = JSON.parse(await file.text());
+                    await restoreFromBackup(backupData);
+                    toast.success('Data restored successfully!');
+                    refreshList();
+                  } catch (error) {
+                    console.error('Restore failed:', error);
+                    toast.error('Failed to restore backup');
+                  }
+                };
+                input.click();
+              }}
+              title="Restore from Backup"
+              className="rounded-r-md rounded-l-none"
+            >
+              <Upload className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => {
+              setViewMode('grid');
+              setIsGridViewOpen(true);
+            }}
+            title="Grid View"
+            className={viewMode === 'grid' ? 'bg-accent' : ''}
+          >
+            <Grid className="h-4 w-4" />
+          </Button>
+
           {selectedSnags.size > 0 && (
             <>
-              <PDFExport 
-                snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))}
+              <PDFExport
+                snags={snags.filter(snag => selectedSnags.has(snag.id))}
                 projectName={projectName}
               />
               <PDFExportList
-                snags={filteredSnags.filter(snag => selectedSnags.has(snag.id))}
+                snags={snags.filter(snag => selectedSnags.has(snag.id))}
                 projectName={projectName}
-                onClose={() => setSelectedSnags(new Set())}
                 isDarkMode={isDarkMode}
+                onClose={() => setSelectedSnags(new Set())}
+                sortOrder={sortBy === 'oldest' ? 'asc' : 'desc'}
               />
             </>
           )}

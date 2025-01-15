@@ -60,6 +60,16 @@ interface SnagListDB extends DBSchema {
 
 let dbInstance: IDBPDatabase<SnagListDB> | null = null;
 
+interface BackupData {
+  version: number;
+  timestamp: string;
+  data: {
+    snags: SnagListDB['snags']['value'][];
+    projects: SnagListDB['projects']['value'][];
+    voiceRecordings: Omit<SnagListDB['voiceRecordings']['value'], 'audioBlob'>[];
+  };
+}
+
 export async function getDB(): Promise<IDBPDatabase<SnagListDB>> {
   if (!isClient) {
     console.error('❌ Attempted to access IndexedDB in server context');
@@ -531,4 +541,89 @@ export async function searchSnags(query: string) {
     
     return searchTerms.every(term => searchableText.includes(term));
   });
+}
+
+export async function createBackup(): Promise<BackupData> {
+  console.log('📦 Creating database backup...');
+  const db = await getDB();
+  
+  try {
+    // Fetch all data from stores
+    const snags = await db.getAll('snags');
+    const projects = await db.getAll('projects');
+    const voiceRecordings = await db.getAll('voiceRecordings');
+    
+    // Create backup object
+    const backup: BackupData = {
+      version: db.version,
+      timestamp: new Date().toISOString(),
+      data: {
+        snags,
+        projects,
+        // Exclude large binary data from backup
+        voiceRecordings: voiceRecordings.map(({ audioBlob, ...rest }) => rest)
+      }
+    };
+    
+    console.log('✅ Backup created successfully', {
+      snags: backup.data.snags.length,
+      projects: backup.data.projects.length,
+      recordings: backup.data.voiceRecordings.length
+    });
+    
+    return backup;
+  } catch (error) {
+    console.error('❌ Error creating backup:', error);
+    throw error;
+  }
+}
+
+export async function restoreFromBackup(backup: BackupData): Promise<void> {
+  console.log('📥 Starting database restore...');
+  const db = await getDB();
+  
+  if (backup.version !== db.version) {
+    console.warn('⚠️ Backup version mismatch:', {
+      backup: backup.version,
+      current: db.version
+    });
+  }
+  
+  const tx = db.transaction(['snags', 'projects'], 'readwrite');
+  
+  try {
+    // Clear existing data
+    await Promise.all([
+      tx.objectStore('snags').clear(),
+      tx.objectStore('projects').clear()
+    ]);
+    
+    // Restore projects first
+    for (const project of backup.data.projects) {
+      await tx.objectStore('projects').add(project);
+    }
+    
+    // Restore snags
+    for (const snag of backup.data.snags) {
+      await tx.objectStore('snags').add(snag);
+    }
+    
+    await tx.done;
+    console.log('✅ Backup restored successfully');
+  } catch (error) {
+    console.error('❌ Error restoring backup:', error);
+    throw error;
+  }
+}
+
+export function downloadBackupFile(backup: BackupData): void {
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `snaglist-backup-${backup.timestamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 } 
