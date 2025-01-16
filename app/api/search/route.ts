@@ -124,7 +124,7 @@ export async function POST(req: Request) {
       }
 
       // Add organic results
-      organicResults.forEach((result) => {
+      organicResults.forEach((result: { title?: string, link?: string, snippet?: string }) => {
         if (result.title || result.link) {
           combinedResults.push({
             title: result.title || 'No title',

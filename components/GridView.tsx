@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { updateSnagAnnotations } from '@/lib/db';
 import { SnagVoiceTranscription } from './SnagVoiceTranscription';
+import { QuickSnagVoiceTranscription } from './QuickSnagVoiceTranscription';
 import ImageAnnotator from './ImageAnnotator';
 
 interface GridViewProps {
@@ -59,7 +60,7 @@ interface EditState {
 interface GridItemProps {
   snag: Snag;
   isDarkMode?: boolean;
-  onSnagUpdate?: (updatedSnag: Snag) => void;
+  onSnagUpdate?: (snag: Snag) => void;
   onImageClick: (snag: Snag) => void;
   onDetailsClick: (e: React.MouseEvent, snag: Snag) => void;
   hoveredId: string | null;
@@ -79,14 +80,45 @@ function GridItem({
   hoveredId,
   onHover
 }: GridItemProps) {
+  const [showQuickVoice, setShowQuickVoice] = useState(false);
+  const lastClickTime = useRef<number>(0);
+  const clickTimeout = useRef<NodeJS.Timeout>();
+
+  const handleVoiceClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const currentTime = Date.now();
+    const timeDiff = currentTime - lastClickTime.current;
+
+    // Clear any existing timeout
+    if (clickTimeout.current) {
+      clearTimeout(clickTimeout.current);
+    }
+
+    if (timeDiff < 300) { // Double click threshold
+      // Double click detected
+      setShowQuickVoice(true);
+      lastClickTime.current = 0; // Reset
+    } else {
+      // First click
+      lastClickTime.current = currentTime;
+      // Set a timeout to reset the last click time
+      clickTimeout.current = setTimeout(() => {
+        lastClickTime.current = 0;
+      }, 300);
+    }
+  };
+
   return (
     <div
       className={`relative group aspect-square rounded-lg overflow-hidden border ${
         isDarkMode ? 'border-gray-700' : 'border-gray-200'
       } hover:border-blue-500 transition-all cursor-pointer`}
       onClick={(e) => {
-        e.stopPropagation();
-        onImageClick(snag);
+        if (!showQuickVoice) { // Only handle click if quick voice is not active
+          e.stopPropagation();
+          onImageClick(snag);
+        }
       }}
       onMouseEnter={() => onHover(snag.id)}
       onMouseLeave={() => onHover(null)}
@@ -162,6 +194,16 @@ function GridItem({
             >
               <Sparkles className="h-3.5 w-3.5 text-white/80" />
             </button>
+            <button
+              onClick={handleVoiceClick}
+              className={cn(
+                "p-1 rounded-full hover:bg-white/20 transition-colors",
+                "focus:outline-none focus:ring-2 focus:ring-white/20"
+              )}
+              title="Double-click to record description"
+            >
+              <Mic className="h-3.5 w-3.5 text-white/80" />
+            </button>
           </div>
         </div>
       </div>
@@ -198,6 +240,28 @@ function GridItem({
           {snag.description || 'No description'}
         </p>
       </div>
+
+      {/* Quick Voice Transcription */}
+      {showQuickVoice && (
+        <div onClick={e => e.stopPropagation()}>
+          <QuickSnagVoiceTranscription
+            snagId={snag.id}
+            onSnagUpdate={(updates) => {
+              const updatedSnag = {
+                ...snag,
+                ...updates,
+                updatedAt: new Date().toISOString()
+              };
+              if (onSnagUpdate) {
+                onSnagUpdate(updatedSnag);
+              }
+              setShowQuickVoice(false);
+            }}
+            isDarkMode={isDarkMode}
+            onClose={() => setShowQuickVoice(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -424,6 +488,8 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [filteredGridSnags, setFilteredGridSnags] = useState<Snag[]>(snags);
   const [searchTerm, setSearchTerm] = useState('');
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const scrollPositionRef = useRef(0);
   const [selectedDetails, setSelectedDetails] = useState<{
     snag: Snag;
     position: { x: number; y: number };
@@ -439,23 +505,26 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
     observationDate: format(new Date(), 'yyyy-MM-dd')
   });
 
-  const handleEdit = (snag: Snag) => {
-    setEditingId(snag.id);
-    setEditState({
-      description: snag.description || '',
-      priority: snag.priority,
-      assignedTo: snag.assignedTo || '',
-      status: snag.status,
-      name: snag.name || '',
-      location: snag.location || '',
-      observationDate: snag.observationDate ? format(new Date(snag.observationDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
-    });
-    setSelectedDetails(null); // Close the details card
-  };
+  // Save scroll position before update
+  const saveScrollPosition = useCallback(() => {
+    if (gridContainerRef.current) {
+      scrollPositionRef.current = gridContainerRef.current.scrollTop;
+    }
+  }, []);
 
+  // Restore scroll position after update
+  const restoreScrollPosition = useCallback(() => {
+    if (gridContainerRef.current) {
+      gridContainerRef.current.scrollTop = scrollPositionRef.current;
+    }
+  }, []);
+
+  // Update filtered snags and restore scroll
   useEffect(() => {
     if (!searchTerm.trim()) {
       setFilteredGridSnags(snags);
+      // Restore scroll position after state update
+      setTimeout(restoreScrollPosition, 0);
       return;
     }
 
@@ -473,7 +542,22 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
     );
     
     setFilteredGridSnags(filtered);
-  }, [searchTerm, snags]);
+    // Don't restore scroll position for search updates
+  }, [searchTerm, snags, restoreScrollPosition]);
+
+  const handleEdit = (snag: Snag) => {
+    setEditingId(snag.id);
+    setEditState({
+      description: snag.description || '',
+      priority: snag.priority,
+      assignedTo: snag.assignedTo || '',
+      status: snag.status,
+      name: snag.name || '',
+      location: snag.location || '',
+      observationDate: snag.observationDate ? format(new Date(snag.observationDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
+    });
+    setSelectedDetails(null); // Close the details card
+  };
 
   const handleDetailsClick = useCallback((e: React.MouseEvent, snag: Snag) => {
     e.stopPropagation();
@@ -567,7 +651,11 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
       </div>
 
       {/* Grid Container */}
-      <div className="mt-16 p-6 overflow-y-auto h-[calc(100vh-4rem)]">
+      <div 
+        ref={gridContainerRef}
+        className="mt-16 p-6 overflow-y-auto h-[calc(100vh-4rem)]"
+        onScroll={saveScrollPosition}
+      >
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {filteredGridSnags.length === 0 ? (
             <div className={`col-span-full flex flex-col items-center justify-center py-12 ${

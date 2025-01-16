@@ -23,7 +23,7 @@ export default function BackupManager() {
       (now.getTime() - new Date(lastReminder).getTime()) > (BACKUP_REMINDER_DAYS * 24 * 60 * 60 * 1000);
 
     if (shouldRemind) {
-      toast.info('Remember to backup your snag list data regularly!', {
+      toast('Remember to backup your snag list data regularly!', {
         duration: 5000,
         icon: '💾'
       });

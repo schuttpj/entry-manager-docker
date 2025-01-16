@@ -7,6 +7,16 @@ const openai = new OpenAI({
 
 export async function POST(request: Request) {
   try {
+    const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+    
+    if (!apiKey) {
+      console.error('OpenAI API key not configured');
+      return NextResponse.json(
+        { error: 'OpenAI API key not configured' },
+        { status: 500 }
+      );
+    }
+
     const formData = await request.formData();
     const audioFile = formData.get('audio') as Blob;
 
@@ -26,6 +36,14 @@ export async function POST(request: Request) {
       language: "en",
     });
 
+    if (!transcription.text) {
+      return NextResponse.json(
+        { error: 'No transcription generated' },
+        { status: 500 }
+      );
+    }
+
+    console.log('Transcription successful:', transcription.text);
     return NextResponse.json({ text: transcription.text });
   } catch (error: any) {
     console.error('Transcription error:', error);

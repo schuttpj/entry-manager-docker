@@ -115,8 +115,7 @@ Name: "Residential Floor Plan"`
         status: error.status,
         message: error.message,
         code: error.code,
-        type: error.type,
-        response: error.response
+        type: error.type
       });
       return NextResponse.json(
         { error: `OpenAI API error: ${error.message}` },

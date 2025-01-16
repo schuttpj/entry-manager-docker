@@ -11,6 +11,10 @@ interface SnagVoiceTranscriptionProps {
   onSnagUpdate: (updates: { description: string; name?: string }) => void;
   isDarkMode?: boolean;
   onClose: () => void;
+  position: {
+    x: number;
+    y: number;
+  };
 }
 
 export function SnagVoiceTranscription({
@@ -19,7 +23,8 @@ export function SnagVoiceTranscription({
   currentName,
   onSnagUpdate,
   isDarkMode = false,
-  onClose
+  onClose,
+  position
 }: SnagVoiceTranscriptionProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [transcribedText, setTranscribedText] = useState('');
@@ -29,15 +34,15 @@ export function SnagVoiceTranscription({
   const dragRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
-  const [position, setPosition] = useState({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 - 200 });
+  const [currentPosition, setCurrentPosition] = useState(position);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!dragRef.current) return;
     e.preventDefault();
     isDraggingRef.current = true;
     dragStartRef.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
+      x: e.clientX - currentPosition.x,
+      y: e.clientY - currentPosition.y
     };
     
     document.body.style.userSelect = 'none';
@@ -52,7 +57,7 @@ export function SnagVoiceTranscription({
       const maxX = window.innerWidth - 400; // 400 is modal width
       const maxY = window.innerHeight - 400; // approximate modal height
       
-      setPosition({
+      setCurrentPosition({
         x: Math.min(Math.max(0, newX), maxX),
         y: Math.min(Math.max(0, newY), maxY)
       });
@@ -110,12 +115,19 @@ export function SnagVoiceTranscription({
         body: formData,
       });
 
-      if (!response.ok) throw new Error('Transcription failed');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Transcription failed');
+      }
       
       const { text } = await response.json();
+      if (!text) throw new Error('No transcription received');
+      
       setTranscribedText(text);
+      toast.success('Audio transcribed successfully');
     } catch (error) {
       console.error('Transcription error:', error);
+      toast.error('Failed to transcribe audio. Please try again.');
     } finally {
       setIsTranscribing(false);
     }
@@ -174,8 +186,8 @@ export function SnagVoiceTranscription({
         isDarkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'
       )}
       style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`
+        left: `${currentPosition.x}px`,
+        top: `${currentPosition.y}px`
       }}
     >
       <div 
