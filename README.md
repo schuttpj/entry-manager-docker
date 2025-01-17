@@ -157,17 +157,41 @@ cp .env.example .env.local
 
 2. Edit `.env.local` and add your API keys:
 ```env
+# OpenAI API Key for voice transcription (optional)
 NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
+
+# SERP API Key for enhanced search capabilities (optional)
 NEXT_PUBLIC_SERP_API_KEY=your_serp_api_key_here
+
+# Port for the development server (optional, defaults to 3000)
 PORT=3000
 ```
 
-3. Build and run with Docker Compose
+3. Start Docker with environment variables:
 ```bash
-docker-compose up --build
+# Start the container (it will automatically use variables from .env.local)
+docker-compose up -d
+
+# Alternative: explicitly specify the env file
+docker-compose --env-file .env.local up -d
 ```
 
-The application will be available at `http://localhost:3000`
+4. Verify environment variables in the container:
+```bash
+# Check specific environment variables
+docker-compose exec app env | findstr NEXT_PUBLIC
+
+# Or check all environment variables
+docker-compose exec app env
+```
+
+If you need to update environment variables:
+1. Edit `.env.local` with your new values
+2. Restart the container:
+```bash
+docker-compose down
+docker-compose up -d
+```
 
 ## 📁 Directory Structure
 
