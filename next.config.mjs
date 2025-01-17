@@ -7,19 +7,29 @@ try {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  output: 'standalone',
   images: {
-    unoptimized: true,
+    domains: ['localhost'],
+    unoptimized: process.env.NODE_ENV === 'production',
   },
   experimental: {
-    webpackBuildWorker: true,
-    parallelServerBuildTraces: true,
-    parallelServerCompiles: true,
+    serverActions: true,
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/uploads/:path*',
+        destination: '/public/uploads/:path*',
+      },
+      {
+        source: '/exports/:path*',
+        destination: '/public/exports/:path*',
+      },
+      {
+        source: '/backups/:path*',
+        destination: '/public/backups/:path*',
+      },
+    ];
   },
 }
 

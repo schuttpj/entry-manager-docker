@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_OPENAI_API_KEY=${NEXT_PUBLIC_OPENAI_API_KEY}
+      - NEXT_PUBLIC_SERP_API_KEY=${NEXT_PUBLIC_SERP_API_KEY}
+    volumes:
+      - ./public/uploads:/app/public/uploads
+      - ./public/exports:/app/public/exports
+      - ./public/backups:/app/public/backups
+      - app-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  app-data:
+    driver: local 
