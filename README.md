@@ -224,6 +224,35 @@ docker-compose logs
 docker-compose logs -f
 ```
 
+## 🚀 Running the Application
+
+### 1. Access the Application
+- Open your browser and navigate to `http://localhost:3000`
+
+### 2. Data Directories
+The following directories are automatically created and persisted:
+- `./public/uploads` - for uploaded files
+- `./public/exports` - for PDF exports
+- `./public/backups` - for database backups
+
+### 3. Environment Variables
+1. Create a `.env.local` file in the project root:
+```env
+# OpenAI API Key for voice transcription (optional)
+NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
+
+# SERP API Key for enhanced search capabilities (optional)
+NEXT_PUBLIC_SERP_API_KEY=your_serp_api_key_here
+
+# Port for the development server (optional, defaults to 3000)
+PORT=3000
+```
+
+### 4. Docker Management Commands
+- Stop the application: `docker-compose down`
+- View logs: `docker-compose logs -f`
+- Restart: `docker-compose restart`
+
 ## 💾 Data Persistence
 
 ### File Storage

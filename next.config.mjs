@@ -13,7 +13,7 @@ const nextConfig = {
     unoptimized: process.env.NODE_ENV === 'production',
   },
   experimental: {
-    serverActions: true,
+    // Server Actions are enabled by default in Next.js 14
   },
   async rewrites() {
     return [

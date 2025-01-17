@@ -5,6 +5,10 @@ const openai = new OpenAI({
   apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '',
 });
 
+// Route segment config
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     const apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY;
@@ -62,10 +66,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-}
-
-export const config = {
-  api: {
-    bodyParser: false
-  }
-}; 
+} 

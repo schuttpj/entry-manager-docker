@@ -12,8 +12,13 @@ interface SearchResult {
   snippet: string;
 }
 
+// Route segment config
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+
+// Initialize OpenAI with a default empty string if no API key is provided
 const openai = new OpenAI({
-  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY
+  apiKey: process.env.NEXT_PUBLIC_OPENAI_API_KEY || process.env.OPENAI_API_KEY || ''
 });
 
 // Get timezone, fallback to Amsterdam if not available
