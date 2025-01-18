@@ -311,8 +311,8 @@ export default function PDFExportList({
             doc.setFont(undefined, 'bold');
             doc.setTextColor(34, 197, 94);
             
-            const watermarkX = margin + contentWidth;
-            const watermarkY = yPosition + (rowHeight / 2) - 5; // Move up slightly to make room for date
+            const watermarkX = margin + contentWidth - 10;
+            const watermarkY = yPosition + (rowHeight / 2) - 5;
             
             doc.text("COMPLETED", watermarkX, watermarkY, { 
               align: 'right',
@@ -322,7 +322,7 @@ export default function PDFExportList({
             const dateText = formatDateSafely(snag.completionDate);
             if (dateText) {
               doc.setFontSize(watermarkFontSize * 0.6);
-              doc.text(dateText, watermarkX, watermarkY + 8, { // Position date 8mm below COMPLETED text
+              doc.text(dateText, watermarkX, watermarkY + 8, {
                 align: 'right',
                 baseline: 'middle'
               });
@@ -419,13 +419,90 @@ export default function PDFExportList({
           xPosition += colWidths.photo;
 
           // Details section - adjusted for new width
-          doc.setFontSize(fontSizes.body);  // Using body size consistently
+          doc.setFontSize(fontSizes.body);
           doc.setFont(undefined, 'normal');
           doc.setTextColor(0, 0, 0);
-          doc.text(`Location: ${snag.location || 'No location'}`, xPosition + 3, yPosition + 5);
           
-          const description = doc.splitTextToSize(snag.description || 'No description', colWidths.details - 6);
-          doc.text(description, xPosition + 3, yPosition + 10);
+          // Calculate total available height for the details section
+          const totalAvailableHeight = rowHeight - 8; // Reduced top/bottom padding
+          const labelHeight = 4; // Height for each label
+          const minContentHeight = 4; // Minimum height for content
+          
+          // Divide available space between the three sections
+          const maxSectionHeight = totalAvailableHeight / 3;
+          
+          let currentY = yPosition + 2; // Reduced initial padding from 5 to 2
+          const lineSpacing = 3;  // Space between label and content
+          const sectionSpacing = 2;  // Space between sections
+
+          // Function to render a section with dynamic sizing
+          const renderSection = (label: string, content: string, maxLines: number) => {
+            // Add label
+            doc.setFont(undefined, 'bold');
+            doc.text(label, xPosition + 3, currentY);
+            currentY += lineSpacing;
+
+            // Calculate available height for content
+            const availableHeight = maxSectionHeight - labelHeight - lineSpacing - sectionSpacing;
+            
+            // Start with body font size and reduce if needed
+            let fontSize = fontSizes.body;
+            let contentLines;
+            
+            do {
+              doc.setFontSize(fontSize);
+              contentLines = doc.splitTextToSize(content, colWidths.details - 6);
+              const lineHeight = fontSize / 4;
+              const totalHeight = contentLines.length * lineHeight;
+              
+              if (totalHeight <= availableHeight || fontSize <= fontSizes.tiny) {
+                break;
+              }
+              
+              fontSize -= 0.5;
+            } while (fontSize > fontSizes.tiny);
+
+            // Render content
+            doc.setFont(undefined, 'normal');
+            doc.text(contentLines, xPosition + 3, currentY);
+            
+            // Update Y position
+            const contentHeight = (contentLines.length * (fontSize / 4));
+            currentY += contentHeight + sectionSpacing;
+            
+            return fontSize; // Return the final font size used
+          };
+
+          // Render each section
+          const nameSize = renderSection('Name:', snag.name || 'No name', 2);
+          const locationSize = renderSection('Location:', snag.location || 'No location', 2);
+          
+          // Description gets remaining space
+          const remainingHeight = yPosition + rowHeight - currentY - 5;
+          doc.setFont(undefined, 'bold');
+          doc.text('Description:', xPosition + 3, currentY);
+          currentY += lineSpacing;
+          
+          // Calculate space for description
+          let fontSize = fontSizes.body;
+          let descriptionLines;
+          
+          do {
+            doc.setFontSize(fontSize);
+            descriptionLines = doc.splitTextToSize(snag.description || 'No description', colWidths.details - 6);
+            const lineHeight = fontSize / 4;
+            const totalHeight = descriptionLines.length * lineHeight;
+            
+            if (totalHeight <= remainingHeight || fontSize <= fontSizes.tiny) {
+              break;
+            }
+            
+            fontSize -= 0.5;
+          } while (fontSize > fontSizes.tiny);
+
+          doc.setFont(undefined, 'normal');
+          doc.text(descriptionLines, xPosition + 3, currentY);
+          
           xPosition += colWidths.details;
 
           // Dates - more readable

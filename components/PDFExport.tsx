@@ -195,7 +195,7 @@ export function PDFExport({ snags, projectName }: PDFExportProps) {
           doc.setTextColor(0, 0, 0);
           doc.setFont(undefined, 'normal');
         }
-        doc.text(`Entry #${snag.snagNumber}`, margin + 2, yPosition + 3);
+        doc.text(`Entry #${snag.snagNumber}: ${snag.name || ''}`, margin + 2, yPosition + 3);
         yPosition += 15;
 
         // Reset text color and font
@@ -205,7 +205,7 @@ export function PDFExport({ snags, projectName }: PDFExportProps) {
         // Add snag details in a grid layout
         doc.setFontSize(10);
         const details = [
-          [`Priority: ${snag.priority}`, `Status: ${snag.status}`],
+          [`Priority: ${snag.priority}`, `Status: ${snag.status}${snag.status === 'Completed' && snag.completionDate ? ` (${format(new Date(snag.completionDate), 'MM/dd/yy')})` : ''}`],
           [`Assigned To: ${snag.assignedTo || 'Unassigned'}`, `Created: ${new Date(snag.createdAt).toLocaleDateString()}`],
           [`Location: ${snag.location || 'No location specified'}`]
         ];
