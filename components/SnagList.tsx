@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import confetti from 'canvas-confetti';
 import { toast } from 'sonner';
+import { SnapLoad } from './SnapLoad';
 
 interface EditState {
   description: string;
@@ -619,6 +620,11 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
           </div>
 
           <div className="flex items-center gap-2">
+            <SnapLoad
+              projectName={projectName}
+              onComplete={handleUploadComplete}
+              isDarkMode={isDarkMode}
+            />
             <div className="flex border rounded-md">
               <Button
                 variant="ghost"
