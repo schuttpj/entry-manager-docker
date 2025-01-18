@@ -10,7 +10,6 @@ services:
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_OPENAI_API_KEY=${NEXT_PUBLIC_OPENAI_API_KEY}
-      - NEXT_PUBLIC_SERP_API_KEY=${NEXT_PUBLIC_SERP_API_KEY}
     volumes:
       - ./public/uploads:/app/public/uploads
       - ./public/exports:/app/public/exports

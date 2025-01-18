@@ -160,9 +160,6 @@ cp .env.example .env.local
 # OpenAI API Key for voice transcription (optional)
 NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
 
-# SERP API Key for enhanced search capabilities (optional)
-NEXT_PUBLIC_SERP_API_KEY=your_serp_api_key_here
-
 # Port for the development server (optional, defaults to 3000)
 PORT=3000
 ```
@@ -216,7 +213,6 @@ The application uses the following volume mappings:
 ### Environment Variables
 Required environment variables:
 - `NEXT_PUBLIC_OPENAI_API_KEY` - For voice transcription (optional)
-- `NEXT_PUBLIC_SERP_API_KEY` - For enhanced search (optional)
 - `PORT` - Application port (default: 3000)
 
 ## 🛠️ Docker Commands
@@ -264,9 +260,6 @@ The following directories are automatically created and persisted:
 ```env
 # OpenAI API Key for voice transcription (optional)
 NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
-
-# SERP API Key for enhanced search capabilities (optional)
-NEXT_PUBLIC_SERP_API_KEY=your_serp_api_key_here
 
 # Port for the development server (optional, defaults to 3000)
 PORT=3000

@@ -743,6 +743,8 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
           console.log('States updated in SnagList');
         }}
         isDarkMode={isDarkMode}
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
         onSnagUpdate={async (updatedSnag) => {
           try {
             const { id, projectName, ...snagData } = updatedSnag;
