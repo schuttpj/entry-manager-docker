@@ -52,6 +52,7 @@
     "date-fns": "^4.1.0",
     "embla-carousel-react": "8.5.1",
     "framer-motion": "^11.17.0",
+    "google-search-results-nodejs": "^2.1.0",
     "idb": "^8.0.1",
     "input-otp": "1.4.1",
     "jspdf": "^2.5.2",

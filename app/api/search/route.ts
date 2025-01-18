@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getJson } from 'serpapi';
+const SerpApi = require('google-search-results-nodejs');
 
 interface SerpAPIError {
   name: string;
@@ -8,8 +8,13 @@ interface SerpAPIError {
 }
 
 interface SerpAPISearchResult {
-  search_metadata?: {
+  search_metadata: {
     id: string;
+    status: string;
+  };
+  search_parameters?: {
+    engine: string;
+    q: string;
   };
   search_information?: {
     total_results?: number;
@@ -49,29 +54,20 @@ export async function POST(req: Request) {
     }
 
     // Validate API key
-    const apiKey = process.env.NEXT_PUBLIC_SERPAPI_API_KEY;
+    const apiKey = process.env.SERPAPI_API_KEY || process.env.NEXT_PUBLIC_SERP_API_KEY;
     if (!apiKey) {
-      console.error('❌ NEXT_PUBLIC_SERPAPI_API_KEY is not set in environment variables');
+      console.error('❌ SERPAPI_API_KEY is not set in environment variables');
       return NextResponse.json(
-        { error: 'Search API configuration error' },
+        { error: 'Search API configuration error. Please check API key configuration.' },
         { status: 500 }
       );
     }
 
-    // Log key presence (safely)
-    console.log('🔑 API Key validation:', {
-      present: !!apiKey,
-      length: apiKey.length,
-      prefix: apiKey.substring(0, 4) + '...',
-      suffix: '...' + apiKey.substring(apiKey.length - 4)
-    });
-
-    console.log(`📝 Search query: "${query}"`);
+    // Initialize SerpApi
+    const search = new SerpApi.GoogleSearch(apiKey);
 
     // Configure search parameters
     const searchParams = {
-      api_key: apiKey,
-      engine: "google",
       q: query,
       location: "Ede, Gelderland, Netherlands",
       google_domain: "google.nl",
@@ -83,7 +79,15 @@ export async function POST(req: Request) {
     console.log('🚀 Sending request to SerpAPI...');
     
     try {
-      const searchResult = await getJson(searchParams);
+      const searchResult: SerpAPISearchResult = await new Promise((resolve, reject) => {
+        search.json(searchParams, (result: SerpAPISearchResult | { error: string }) => {
+          if ('error' in result) {
+            reject(new Error(result.error));
+          } else {
+            resolve(result);
+          }
+        });
+      });
       
       console.log('📊 Raw SerpAPI response received');
       console.log('Response type:', typeof searchResult);
@@ -124,7 +128,7 @@ export async function POST(req: Request) {
       }
 
       // Add organic results
-      organicResults.forEach((result: { title?: string, link?: string, snippet?: string }) => {
+      organicResults.forEach((result) => {
         if (result.title || result.link) {
           combinedResults.push({
             title: result.title || 'No title',

@@ -348,7 +348,8 @@ export async function updateSnag(id: string, updates: Partial<Omit<SnagListDB['s
     ...snag,
     ...updates,
     updatedAt: new Date(),
-    completionDate: updates.status === 'Completed' ? new Date() : snag.completionDate
+    // Only set completion date to current date if status is Completed and no completion date was provided
+    completionDate: updates.status === 'Completed' && !updates.completionDate ? new Date() : updates.completionDate || snag.completionDate
   };
   
   await db.put('snags', updatedSnag);

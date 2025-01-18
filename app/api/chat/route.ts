@@ -36,8 +36,12 @@ async function performWebSearch(query: string): Promise<SearchResult[]> {
   try {
     console.log(`🔍 Initiating web search for query: "${query}"`);
     
-    // Get the correct API URL from environment variables
-    const searchApiUrl = process.env.NEXT_PUBLIC_SEARCH_API_URL || 'http://localhost:3001/api/search';
+    // Get the correct API URL
+    const baseUrl = process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}` 
+      : 'http://localhost:3000';
+    const searchApiUrl = `${baseUrl}/api/search`;
+    
     console.log(`🌐 Making request to: ${searchApiUrl}`);
     
     const searchResult = await fetch(searchApiUrl, {
@@ -163,7 +167,7 @@ export async function POST(req: Request) {
     });
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4',
       messages: [
         {
           role: 'system',

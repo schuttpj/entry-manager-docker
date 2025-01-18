@@ -7,7 +7,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { format } from 'date-fns';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from './ui/dialog';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -16,6 +16,7 @@ import { updateSnagAnnotations } from '@/lib/db';
 import { SnagVoiceTranscription } from './SnagVoiceTranscription';
 import { QuickSnagVoiceTranscription } from './QuickSnagVoiceTranscription';
 import ImageAnnotator from './ImageAnnotator';
+import confetti from 'canvas-confetti';
 
 interface GridViewProps {
   snags: Snag[];
@@ -55,6 +56,7 @@ interface EditState {
   name: string;
   location: string;
   observationDate: string;
+  completionDate?: Date | null;
 }
 
 interface GridItemProps {
@@ -495,6 +497,9 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
     position: { x: number; y: number };
   } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [completionDateDialogOpen, setCompletionDateDialogOpen] = useState(false);
+  const [completionDate, setCompletionDate] = useState('');
+  const [snagToComplete, setSnagToComplete] = useState<Snag | null>(null);
   const [editState, setEditState] = useState<EditState>({
     description: '',
     priority: 'Medium',
@@ -546,16 +551,20 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
   }, [searchTerm, snags, restoreScrollPosition]);
 
   const handleEdit = (snag: Snag) => {
+    console.log('🔄 Initializing edit state for snag:', snag);
     setEditingId(snag.id);
-    setEditState({
+    const newEditState: EditState = {
       description: snag.description || '',
       priority: snag.priority,
       assignedTo: snag.assignedTo || '',
       status: snag.status,
       name: snag.name || '',
       location: snag.location || '',
-      observationDate: snag.observationDate ? format(new Date(snag.observationDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd')
-    });
+      observationDate: snag.observationDate ? format(new Date(snag.observationDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+      completionDate: snag.completionDate ? new Date(snag.completionDate) : null
+    };
+    console.log('📝 New edit state:', newEditState);
+    setEditState(newEditState);
     setSelectedDetails(null); // Close the details card
   };
 
@@ -582,6 +591,213 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
       setEditingId(null);
     }
   }, [isOpen]);
+
+  const triggerConfetti = () => {
+    console.log('Triggering confetti celebration');
+    // Create a simple confetti burst
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { x: 0.5, y: 0.6 }
+    });
+
+    // Create another burst after a small delay
+    setTimeout(() => {
+      confetti({
+        particleCount: 50,
+        spread: 100,
+        origin: { x: 0.5, y: 0.6 }
+      });
+    }, 250);
+  };
+
+  const handleCompletionDateSubmit = async () => {
+    console.log('=== START: handleCompletionDateSubmit ===');
+    console.log('Initial state:', {
+      completionDate,
+      snagToComplete,
+      editingId,
+      editState,
+      currentSnags: snags
+    });
+
+    if (!completionDate || !snagToComplete) {
+      console.log('❌ Missing required data:', { completionDate, snagToComplete });
+      setCompletionDateDialogOpen(false);
+      return;
+    }
+
+    const date = new Date(completionDate);
+    if (isNaN(date.getTime())) {
+      console.error('❌ Invalid completion date:', completionDate);
+      return;
+    }
+
+    console.log('✅ Valid completion date:', {
+      inputDate: completionDate,
+      parsedDate: date,
+      isoString: date.toISOString()
+    });
+
+    if (onSnagUpdate && editingId) {
+      console.log('🔍 Finding snag with id:', editingId);
+      const currentSnag = snags.find(s => s.id === editingId);
+      console.log('Found current snag:', currentSnag);
+
+      if (currentSnag) {
+        try {
+          // Create the updated snag with all required fields
+          const updatedSnag: Snag = {
+            ...currentSnag,
+            ...editState,
+            status: 'Completed' as const,
+            completionDate: date.toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          console.log('📝 Preparing to update snag:', {
+            original: currentSnag,
+            updated: updatedSnag,
+            changes: {
+              status: updatedSnag.status !== currentSnag.status ? 'Changed' : 'Same',
+              completionDate: updatedSnag.completionDate !== currentSnag.completionDate ? 'Changed' : 'Same',
+              selectedDate: date.toISOString(),
+              editState: JSON.stringify(editState)
+            }
+          });
+
+          // Update the snag in the database first
+          console.log('💾 Calling onSnagUpdate with completion date:', date.toISOString());
+          await onSnagUpdate(updatedSnag);
+          console.log('✅ Database update successful');
+          
+          // Show success feedback immediately after successful update
+          console.log('🎉 Triggering success feedback');
+          triggerConfetti();
+          
+          // Short delay to let confetti start
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          toast.success('Entry completed successfully! 🎉');
+
+          // Update local state with the correct completion date
+          console.log('🔄 Updating local state with completion date:', date.toISOString());
+          setEditState(prev => {
+            const newState: EditState = {
+              ...prev,
+              status: 'Completed',
+              completionDate: date
+            };
+            console.log('New edit state with completion date:', newState);
+            return newState;
+          });
+          
+          // Wait a bit to show the completed state
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Clean up dialogs and state
+          console.log('🧹 Cleaning up state');
+          setCompletionDateDialogOpen(false);
+          setCompletionDate('');
+          setSnagToComplete(null);
+          setEditingId(null);
+
+          console.log('=== END: handleCompletionDateSubmit - Success ===');
+        } catch (error) {
+          console.error('❌ Failed to update snag:', error);
+          console.log('Error details:', {
+            error,
+            snagId: editingId,
+            attemptedUpdate: {
+              status: 'Completed',
+              completionDate: date.toISOString()
+            }
+          });
+          toast.error('Failed to update entry');
+          // Reset state on error
+          setEditState(prev => ({
+            ...prev,
+            status: 'In Progress',
+            completionDate: null
+          }));
+          console.log('=== END: handleCompletionDateSubmit - Error ===');
+        }
+      } else {
+        console.error('❌ Could not find snag with id:', editingId);
+        toast.error('Could not find the entry to update');
+      }
+    } else {
+      console.log('❌ Missing onSnagUpdate or editingId:', { 
+        hasOnSnagUpdate: !!onSnagUpdate, 
+        editingId,
+        snagToCompleteId: snagToComplete?.id 
+      });
+      toast.error('Could not update the entry');
+    }
+  };
+
+  // Add debug logs for status change handler
+  const handleStatusChange = (value: 'In Progress' | 'Completed') => {
+    console.log('=== START: handleStatusChange ===');
+    console.log('Status change requested:', {
+      newStatus: value,
+      currentStatus: editState.status,
+      editingId,
+      currentSnags: snags.length
+    });
+
+    if (value === 'Completed') {
+      const snagToUpdate = snags.find(s => s.id === editingId);
+      console.log('Setting snag to complete:', { 
+        editingId, 
+        snagToUpdate,
+        currentEditState: editState
+      });
+      
+      if (snagToUpdate) {
+        setSnagToComplete(snagToUpdate);
+        setCompletionDateDialogOpen(true);
+        console.log('✅ Opened completion date dialog');
+      } else {
+        console.error('❌ Could not find snag to complete');
+        toast.error('Could not find the entry to update');
+      }
+    } else {
+      setEditState((prev) => {
+        const newState = { ...prev, status: value };
+        console.log('Updating edit state:', { previous: prev, new: newState });
+        return newState;
+      });
+    }
+    console.log('=== END: handleStatusChange ===');
+  };
+
+  // Add effect to prevent closing while editing
+  useEffect(() => {
+    if (editingId || completionDateDialogOpen) {
+      // Prevent closing the grid view while editing
+      return;
+    }
+  }, [editingId, completionDateDialogOpen]);
+
+  // Add the handleClose function back
+  const handleClose = useCallback(() => {
+    console.log('handleClose called');
+    if (editingId || completionDateDialogOpen) {
+      console.log('Cannot close grid view while editing');
+      return;
+    }
+    // Clean up state before closing
+    setSelectedImage(null);
+    setSelectedSnag(null);
+    setSelectedDetails(null);
+    setEditingId(null);
+    setCompletionDateDialogOpen(false);
+    setCompletionDate('');
+    setSnagToComplete(null);
+    console.log('Closing grid view');
+    onClose();
+  }, [editingId, completionDateDialogOpen, onClose]);
 
   // Only render if isOpen is true
   if (!isOpen) {
@@ -642,7 +858,7 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
           onClick={(e) => {
             e.stopPropagation();
             console.log('Exit button clicked in GridView');
-            onClose();
+            handleClose();
           }}
           className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
         >
@@ -804,7 +1020,7 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
                   </Label>
                   <Select
                     value={editState.status}
-                    onValueChange={(value) => setEditState((prev) => ({ ...prev, status: value as 'In Progress' | 'Completed' }))}
+                    onValueChange={handleStatusChange}
                   >
                     <SelectTrigger className={`${isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white'}`}>
                       <SelectValue placeholder="Select status" />
@@ -893,6 +1109,50 @@ export function GridView({ snags, isOpen, onClose, isDarkMode = false, onSnagUpd
           </div>
         </div>
       )}
+
+      {/* Completion Date Dialog */}
+      <Dialog open={completionDateDialogOpen} onOpenChange={setCompletionDateDialogOpen}>
+        <DialogContent className="bg-white dark:bg-gray-800 border-0 shadow-lg sm:max-w-[425px]">
+          <DialogHeader className="space-y-3 pb-4 border-b">
+            <DialogTitle className="text-xl font-semibold text-gray-900 dark:text-white">Set Completion Date</DialogTitle>
+            <DialogDescription className="text-gray-500 dark:text-gray-400">
+              Please enter the completion date for this entry.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-6">
+            <div className="flex items-center gap-4">
+              <Label htmlFor="completionDate" className="min-w-[80px] text-gray-700 dark:text-gray-300">
+                Date
+              </Label>
+              <Input
+                id="completionDate"
+                type="date"
+                value={completionDate}
+                onChange={(e) => setCompletionDate(e.target.value)}
+                className="flex-1 bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+          <div className="pt-4 border-t flex justify-end gap-3">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setCompletionDateDialogOpen(false);
+                setEditState(prev => ({ ...prev, status: 'In Progress' }));
+              }}
+              className="bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600"
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCompletionDateSubmit}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ... rest of existing modals ... */}
     </div>
