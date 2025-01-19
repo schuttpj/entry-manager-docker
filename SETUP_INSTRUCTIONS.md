@@ -18,6 +18,7 @@ Download these files to a new folder on your computer:
 3. Double-click `setup.bat`
    - If Windows warns about security, click "More info" then "Run anyway"
 4. Follow the prompts to add your OpenAI API key (optional)
+5. Wait while the script downloads the Docker image (this may take a few minutes)
 
 ### Mac/Linux Users:
 1. Create a new folder:
@@ -32,6 +33,7 @@ Download these files to a new folder on your computer:
    ./setup.sh
    ```
 4. Follow the prompts to add your OpenAI API key (optional)
+5. Wait while the script downloads the Docker image (this may take a few minutes)
 
 ## 4. Start the Application
 1. In the same folder, run:
@@ -46,4 +48,16 @@ Download these files to a new folder on your computer:
 - The app works offline once started
 - Voice features only work if you added an API key
 - Need an API key? Get one from: https://platform.openai.com/api-keys
-- Want to change your API key later? Edit `config.env` in your folder 
+- Want to change your API key later? Edit `.env.local` in your folder
+
+## Troubleshooting
+
+### Docker Image Download
+- If the image download fails, check your internet connection
+- The download might take several minutes depending on your connection speed
+- You can manually download the image by running: `docker pull yourusername/entry-manager:latest`
+
+### API Key Issues
+- If you skipped adding the API key during setup, you can add it later
+- Voice features won't work until you add a valid API key
+- The API key should start with 'sk-' and be about 51 characters long 

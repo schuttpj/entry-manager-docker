@@ -31,51 +31,51 @@ echo.
 echo Creating .env.local from template...
 copy .env.example .env.local > nul
 
+REM Initialize API key status
+set API_KEY_SET=0
+
 REM Prompt for API key
 echo.
 echo Would you like to add your OpenAI API key for voice features? (Y/N)
 set /p ADD_KEY=
 if /i "%ADD_KEY%"=="Y" (
-    :get_api_key
     echo.
     echo Please enter your OpenAI API key:
-    echo (It should start with 'sk-' and be about 51 characters long)
     echo (You can paste it by right-clicking in this window)
     set /p API_KEY=
     
-    REM Validate API key format
-    echo %API_KEY% | findstr /r "^sk-[a-zA-Z0-9]\{48\}$" > nul
+    echo.
+    echo Debug: Current directory is:
+    cd
+    echo Debug: Saving API key to .env.local...
+    
+    REM Direct file write approach
+    echo OPENAI_API_KEY=%API_KEY%> .env.local
+    echo NEXT_PUBLIC_OPENAI_API_KEY=%API_KEY%>> .env.local
+    
     if %errorlevel% neq 0 (
-        echo.
-        echo Error: The API key format appears to be invalid.
-        echo It should start with 'sk-' and be followed by 48 characters.
-        echo.
-        echo Would you like to try again? (Y/N)
-        set /p RETRY=
-        if /i "%RETRY%"=="Y" goto get_api_key
-        echo.
-        echo Continuing without API key...
-        set API_KEY=
-    ) else (
-        echo.
-        echo API key format verified.
-        REM Replace placeholder in .env.local with actual API key
-        powershell -Command "(Get-Content .env.local) -replace 'your_api_key_here', '%API_KEY%' | Set-Content .env.local"
-        echo API key has been added to .env.local
+        echo Error: Failed to save API key to .env.local
+        pause
+        exit /b 1
     )
+    echo API key has been saved successfully!
+    echo Debug: Verifying .env.local exists:
+    dir .env.local
+    set API_KEY_SET=1
 ) else (
     echo.
     echo .env.local created with placeholder API key.
     echo You can add your API key later by editing .env.local
 )
 
+echo Debug: Creating docker-compose.yml...
 REM Create docker-compose.yml if it doesn't exist
 if not exist docker-compose.yml (
     echo Creating docker-compose.yml...
     echo version: '3.8' > docker-compose.yml
     echo services: >> docker-compose.yml
     echo   app: >> docker-compose.yml
-    echo     image: yourusername/entry-manager:latest >> docker-compose.yml
+    echo     image: schuttpj1986/entry-manager:latest >> docker-compose.yml
     echo     ports: >> docker-compose.yml
     echo       - "3000:3000" >> docker-compose.yml
     echo     volumes: >> docker-compose.yml
@@ -91,12 +91,27 @@ if not exist docker-compose.yml (
 )
 
 echo.
+echo Downloading Docker image...
+echo This might take a few minutes depending on your internet connection...
+docker pull schuttpj1986/entry-manager:latest
+if %errorlevel% neq 0 (
+    echo.
+    echo Error: Failed to download Docker image.
+    echo Please check your internet connection and try again.
+    pause
+    exit /b 1
+)
+echo Docker image downloaded successfully!
+
+echo.
 echo Setup complete!
 echo.
-if "%API_KEY%"=="" (
+if "%API_KEY_SET%"=="0" (
     echo Note: Voice features will be disabled. You can enable them later by:
     echo 1. Getting an API key from https://platform.openai.com/api-keys
     echo 2. Adding it to .env.local in this folder
+) else (
+    echo Voice features are enabled with your API key.
 )
 echo.
 echo Next steps:

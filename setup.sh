@@ -30,7 +30,7 @@ cp .env.example .env.local
 # Function to validate API key format
 validate_api_key() {
     local api_key=$1
-    if [[ $api_key =~ ^sk-[A-Za-z0-9]{48}$ ]]; then
+    if [[ $api_key =~ ^sk- ]]; then
         return 0
     else
         return 1
@@ -44,7 +44,7 @@ if [[ $ADD_KEY =~ ^[Yy]$ ]]; then
     while true; do
         echo
         echo "Please enter your OpenAI API key:"
-        echo "(It should start with 'sk-' and be about 51 characters long)"
+        echo "(It should start with 'sk-')"
         echo "(You can paste it using Ctrl+Shift+V or Command+V)"
         read API_KEY
         
@@ -58,7 +58,7 @@ if [[ $ADD_KEY =~ ^[Yy]$ ]]; then
         else
             echo
             echo "Error: The API key format appears to be invalid."
-            echo "It should start with 'sk-' and be followed by 48 characters."
+            echo "It should start with 'sk-'"
             echo
             read -p "Would you like to try again? (y/N) " RETRY
             if [[ ! $RETRY =~ ^[Yy]$ ]]; then
@@ -81,7 +81,7 @@ if [ ! -f docker-compose.yml ]; then
 version: '3.8'
 services:
   app:
-    image: yourusername/entry-manager:latest
+    image: schuttpj1986/entry-manager:latest
     ports:
       - "3000:3000"
     volumes:
@@ -96,6 +96,17 @@ volumes:
     driver: local
 EOL
 fi
+
+echo
+echo "Downloading Docker image..."
+echo "This might take a few minutes depending on your internet connection..."
+if ! docker pull schuttpj1986/entry-manager:latest; then
+    echo
+    echo "Error: Failed to download Docker image."
+    echo "Please check your internet connection and try again."
+    exit 1
+fi
+echo "Docker image downloaded successfully!"
 
 echo
 echo "Setup complete!"
