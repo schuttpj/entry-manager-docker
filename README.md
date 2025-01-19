@@ -74,75 +74,91 @@ A powerful, locally-hosted application for managing and organizing entry lists w
 - Performance optimized
 - Cross-platform support
 
-## �� Initial Setup
+## 🚀 Getting Started
 
-### 1. Create Project Directory
+### 1. Required Software
+Before you begin, you'll need to install these applications:
 
-#### Windows
+1. **Docker Desktop** (Required)
+   - Download from: https://www.docker.com/products/docker-desktop
+   - This provides the easiest way to run Docker containers
+   - After installation, start Docker Desktop and wait for it to fully load
+
+2. **Visual Studio Code** (Recommended)
+   - Download from: https://code.visualstudio.com/
+   - This is the recommended editor for working with the code
+   - Install the "Docker" extension in VS Code for better Docker integration
+
+3. **Git** (Required)
+   - Download from: https://git-scm.com/downloads
+   - This is needed to clone the repository
+   - During installation, use the default options if unsure
+
+4. **Node.js** (Required)
+   - Download from: https://nodejs.org/
+   - Install version 20 or later
+   - Choose the "LTS" (Long Term Support) version
+
+### 2. Installation Steps
+
+#### A. Create Project Directory
 1. Open File Explorer
 2. Navigate to where you want to create the project (e.g., `C:\Projects\`)
 3. Create a new folder named `entry-manager-docker`
 
-Example directory structure:
-```
-C:\Projects\
-└── entry-manager-docker\    # Your project folder
-```
+#### B. Clone the Repository
+1. Open Terminal (or PowerShell on Windows):
+   ```bash
+   # Navigate to your project folder
+   cd C:\Projects\entry-manager-docker  # Windows example
+   # or
+   cd ~/Projects/entry-manager-docker   # Mac/Linux example
 
-To navigate using Command Prompt (CMD):
+   # Clone the repository (the dot at the end is important)
+   git clone https://github.com/schuttpj/entry-manager-docker .
+   ```
+
+#### C. Install Dependencies
 ```bash
-# Navigate to C: drive
-C:
-
-# Go to Projects folder (create it if it doesn't exist)
-mkdir Projects
-cd Projects
-
-# Create and enter project directory
-mkdir entry-manager-docker
-cd entry-manager-docker
+# Install project dependencies
+npm clean-install --legacy-peer-deps
 ```
 
+#### D. Set Up Environment
+1. Create your environment file:
+   ```bash
+   # Windows
+   copy .env.example .env.local
 
-Example directory structure:
-```
-~/Projects/
-└── entry-manager-docker/    # Your project folder
-```
+   # Mac/Linux
+   cp .env.example .env.local
+   ```
 
-### 2. Clone Repository
+2. Edit `.env.local` in VS Code (or any text editor)
+   - OpenAI API key is optional (only needed for voice features)
+   - Save the file after editing
 
-Once you're inside the `entry-manager-docker` directory, clone the repository:
-```bash
-git clone https://github.com/schuttpj/entry-manager-docker .
-```
-Note: The dot (.) at the end is important - it clones into the current directory instead of creating a new subdirectory.
+#### E. Start the Application
+1. Make sure Docker Desktop is running
+2. Open Terminal in your project folder and run:
+   ```bash
+   # Build and start the container
+   docker-compose up -d
 
-### 3. Verify Setup
-After cloning, your directory structure should look like this:
-```
-entry-manager-docker/
-├── app/
-├── components/
-├── lib/
-├── public/
-│   ├── uploads/
-│   ├── exports/
-│   └── backups/
-├── .env.example
-├── docker-compose.yml
-├── Dockerfile
-└── README.md
-```
+   # Check if it's running (optional)
+   docker-compose ps
+   ```
 
-To verify the setup:
-```bash
-# List all files (Windows CMD/PowerShell)
-dir
+#### F. Access the Application
+1. Open your web browser
+2. Go to: http://localhost:3000
+3. You should see the application running
 
-# List all files (Linux/MacOS)
-ls -la
-```
+### What's Next?
+- All your data will be stored locally on your computer
+- Images will be saved in the `public/uploads` folder
+- The application works offline once started
+- Use the troubleshooting guide below if you encounter any issues
 
 ## 🔧 Environment Setup
 
@@ -190,6 +206,53 @@ docker-compose down
 docker-compose up -d
 ```
 
+## ⚠️ Troubleshooting Common Issues
+
+### Dependency Installation Issues
+1. Always use the `--legacy-peer-deps` flag:
+   ```bash
+   # Fresh install (recommended)
+   npm clean-install --legacy-peer-deps
+
+   # Alternative install
+   npm install --legacy-peer-deps
+   ```
+
+2. If you get canvas-related errors:
+   ```bash
+   # Windows: Install build tools
+   npm install --global windows-build-tools
+
+   # Linux: Install required packages
+   sudo apt-get install build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
+   ```
+
+3. If you get OpenAI API errors:
+   - Ensure you've set up OPENAI_API_KEY in your .env.local file
+   - Voice transcription won't work without this key
+   - Other features will still work without the API key
+
+### Port Conflicts
+If port 3000 is already in use, you can:
+1. Change the port in docker-compose.yml:
+   ```yaml
+   ports:
+     - "3001:3000"   # Maps container port 3000 to host port 3001
+   ```
+2. Or stop the service using port 3000:
+   ```bash
+   # Windows: Find process using port 3000
+   netstat -ano | findstr :3000
+   # Kill the process (replace PID with the process ID)
+   taskkill /PID PID /F
+   ```
+
+### Data Persistence
+- All data is stored in Docker volumes
+- Check volume status: `docker volume ls`
+- Backup volumes before updates
+- Use `docker-compose down` (not `docker-compose down -v`) to preserve data
+
 ## 📁 Directory Structure
 
 The application uses several directories for data storage, all persisted through Docker volumes:
@@ -234,121 +297,3 @@ docker-compose down
 # Stop and remove volumes (warning: this will delete all data)
 docker-compose down -v
 ```
-
-### Viewing Logs
-```bash
-# View logs
-docker-compose logs
-
-# Follow logs
-docker-compose logs -f
-```
-
-## 🚀 Running the Application
-
-### 1. Access the Application
-- Open your browser and navigate to `http://localhost:3000`
-
-### 2. Data Directories
-The following directories are automatically created and persisted:
-- `./public/uploads` - for uploaded files
-- `./public/exports` - for PDF exports
-- `./public/backups` - for database backups
-
-### 3. Environment Variables
-1. Create a `.env.local` file in the project root:
-```env
-# OpenAI API Key for voice transcription (optional)
-NEXT_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
-
-# Port for the development server (optional, defaults to 3000)
-PORT=3000
-```
-
-### 4. Docker Management Commands
-- Stop the application: `docker-compose down`
-- View logs: `docker-compose logs -f`
-- Restart: `docker-compose restart`
-
-## 💾 Data Persistence
-
-### File Storage
-- All uploaded files are stored in `./public/uploads`
-- PDF exports are saved to `./public/exports`
-- Database backups are stored in `./public/backups`
-
-### Accessing Files
-- Uploads: `http://localhost:3000/uploads/
-- Exports: `http://localhost:3000/exports/
-- Backups: `http://localhost:3000/backups/
-
-### Backup and Restore
-1. Backups are automatically stored in the `./public/backups` directory
-2. To restore from a backup:
-   - Place the backup file in the `./public/backups` directory
-   - Use the application's restore functionality
-   - The backup will be accessible through the mounted volume
-
-## 🔒 Security Notes
-
-1. API Keys:
-   - Never commit `.env.local` to version control
-   - Use secure API keys and rotate them regularly
-   - The `.env.example` file provides a template for required variables
-
-2. File Permissions:
-   - The application runs as a non-root user (nextjs:nodejs)
-   - All data directories have appropriate permissions set
-   - Host directory permissions should be set appropriately
-
-## 🚨 Troubleshooting
-
-1. **Permission Issues**
-   ```bash
-   # Fix permissions on host machine
-   sudo chown -R 1001:1001 public/uploads public/exports public/backups
-   ```
-
-2. **Container Won't Start**
-   - Check if ports are already in use
-   - Verify environment variables are set correctly
-   - Check Docker logs for detailed error messages
-
-3. **Files Not Persisting**
-   - Verify volume mappings in docker-compose.yml
-   - Check host directory permissions
-   - Ensure directories exist on host machine
-
-## 📝 Development Notes
-
-### Building for Production
-```bash
-# Build production image
-docker build -t entry-manager .
-
-# Run production container
-docker run -p 3000:3000 entry-manager
-```
-
-### Local Development
-For local development without Docker:
-1. Install dependencies: `npm install`
-2. Start development server: `npm run dev`
-
-## 📚 Additional Resources
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Docker Documentation](https://docs.docker.com/)
-- [Docker Compose Documentation](https://docs.docker.com/compose/)
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details. 

@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import ImageAnnotator from './ImageAnnotator';
 import { QuickSnagVoiceTranscription } from './QuickSnagVoiceTranscription';
 import { addSnag, updateSnag } from '@/lib/db';
+import { generateThumbnail } from '@/lib/utils';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Maximize, Mic, MicOff, Sparkles, FolderOpen, Save, Check, AlertCircle, PencilLine, BookmarkPlus } from 'lucide-react';
@@ -236,11 +237,20 @@ export function SnapLoad({ projectName, onComplete, isDarkMode = false }: SnapLo
       } else {
         // Create new entry
         debug('SaveEntry', 'Creating new entry');
+        
+        // Generate thumbnail
+        const thumbnail = await generateThumbnail(currentImage.dataUrl, {
+          maxWidth: 800,
+          quality: 0.95,
+          maxSizeMB: 0.8
+        });
+
         savedSnag = await addSnag({
           projectName,
           name: currentImage.name,
           description: currentImage.description,
           photoPath: currentImage.dataUrl,
+          thumbnailPath: thumbnail,
           priority: 'Medium' as const,
           status: 'In Progress' as const,
           assignedTo: '',
@@ -306,11 +316,18 @@ export function SnapLoad({ projectName, onComplete, isDarkMode = false }: SnapLo
             debug('SaveAll', `Successfully updated image: ${image.name}`);
           } else {
             // Create new entry
+            const thumbnail = await generateThumbnail(image.dataUrl, {
+              maxWidth: 800,
+              quality: 0.95,
+              maxSizeMB: 0.8
+            });
+
             const savedSnag = await addSnag({
               projectName,
               name: image.name,
               description: image.description,
               photoPath: image.dataUrl,
+              thumbnailPath: thumbnail,
               priority: 'Medium' as const,
               status: 'In Progress' as const,
               assignedTo: '',
