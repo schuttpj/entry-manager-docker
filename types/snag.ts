@@ -13,6 +13,7 @@ export interface Snag {
   name: string;
   description: string;
   photoPath: string;
+  thumbnailPath: string;
   priority: 'Low' | 'Medium' | 'High';
   assignedTo: string;
   status: 'In Progress' | 'Completed';

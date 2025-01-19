@@ -13,6 +13,7 @@ interface SnagListDB extends DBSchema {
       name: string;
       description: string;
       photoPath: string;
+      thumbnailPath: string;
       priority: 'Low' | 'Medium' | 'High';
       assignedTo: string;
       status: 'In Progress' | 'Completed';
@@ -134,6 +135,7 @@ export async function getDB(): Promise<IDBPDatabase<SnagListDB>> {
             name: 'Sample Entry',
             description: 'This is a sample entry to demonstrate the application functionality.',
             photoPath: '/placeholder.jpg',
+            thumbnailPath: '/placeholder-thumb.jpg',
             priority: 'Medium' as const,
             assignedTo: 'Demo User',
             status: 'In Progress' as const,
@@ -269,71 +271,61 @@ export async function addSnag({
   name,
   description,
   photoPath,
+  thumbnailPath,
   priority,
   assignedTo,
   status,
   location,
   completionDate = null,
   observationDate = new Date(),
+  annotations = []
 }: {
   projectName: string;
   name: string;
   description: string;
   photoPath: string;
+  thumbnailPath: string;
   priority: 'Low' | 'Medium' | 'High';
   assignedTo: string;
   status: 'In Progress' | 'Completed';
   location: string;
   completionDate?: Date | null;
   observationDate?: Date;
+  annotations?: any[];
 }) {
-  console.log('📝 Starting to add new snag...');
-  console.log('📋 Snag details:', { projectName, name, description, photoPath, priority, assignedTo, status, location });
+  const db = await getDB();
+  const id = crypto.randomUUID();
+  const now = new Date();
+
+  // Get the next snag number for this project
+  const snagIndex = db.transaction('snags', 'readonly')
+    .store
+    .index('by-project');
   
-  try {
-    const db = await getDB();
-    const id = crypto.randomUUID();
-    const now = new Date();
+  const existingSnags = await snagIndex.getAll(projectName);
+  const snagNumber = existingSnags.length + 1;
 
-    // Get the highest snag number for this project and increment
-    console.log('🔢 Getting highest snag number for project:', projectName);
-    const index = db.transaction('snags').store.index('by-project');
-    const snags = await index.getAll(projectName);
-    const maxSnagNumber = snags.reduce((max, snag) => Math.max(max, snag.snagNumber), 0);
-    const snagNumber = maxSnagNumber + 1;
-    console.log('📊 Generated snag number:', snagNumber);
+  const snag = {
+    id,
+    projectName,
+    snagNumber,
+    name,
+    description,
+    photoPath,
+    thumbnailPath,
+    priority,
+    assignedTo,
+    status,
+    location,
+    createdAt: now,
+    updatedAt: now,
+    completionDate,
+    observationDate,
+    annotations
+  };
 
-    const snag = {
-      id,
-      projectName,
-      snagNumber,
-      name,
-      description,
-      photoPath,
-      priority,
-      assignedTo,
-      status,
-      location,
-      createdAt: now,
-      updatedAt: now,
-      completionDate,
-      observationDate,
-      annotations: []
-    };
-
-    console.log('💾 Adding snag to database...');
-    await db.add('snags', snag);
-    console.log('✅ Successfully added snag:', { id, snagNumber, projectName });
-    return snag;
-  } catch (error: any) {
-    console.error('❌ Error adding snag:', error);
-    console.error('📄 Error details:', {
-      message: error?.message || 'Unknown error',
-      stack: error?.stack || 'No stack trace',
-      name: error?.name || 'Unknown error type'
-    });
-    throw error;
-  }
+  await db.add('snags', snag);
+  return snag;
 }
 
 export async function updateSnag(id: string, updates: Partial<Omit<SnagListDB['snags']['value'], 'id' | 'snagNumber'>>) {

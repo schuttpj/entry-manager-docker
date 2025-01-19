@@ -2,7 +2,8 @@ import { useCallback, useState, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, X, Check, FileText, Info } from 'lucide-react';
 import { addSnag } from '@/lib/db';
-import { compressImage } from '@/lib/utils';
+import { compressImage, generateThumbnail } from '@/lib/utils';
+import { toast } from 'react-hot-toast';
 
 interface UploadAreaProps {
   projectName: string;
@@ -304,6 +305,13 @@ export function UploadArea({
                   maxSizeMB: 2
                 });
 
+                // Generate thumbnail for grid view
+                const thumbnail = await generateThumbnail(reader.result, {
+                  maxWidth: 800,
+                  quality: 0.95,
+                  maxSizeMB: 0.8
+                });
+
                 // Validate and set default values for fields
                 const priority = preview.priority && ['Low', 'Medium', 'High'].includes(preview.priority) 
                   ? preview.priority as 'Low' | 'Medium' | 'High'
@@ -322,6 +330,7 @@ export function UploadArea({
                   name: preview.name,
                   description: preview.description,
                   photoPath: compressedImage,
+                  thumbnailPath: thumbnail,
                   priority,
                   assignedTo: preview.assignedTo || '',
                   status,
@@ -334,10 +343,15 @@ export function UploadArea({
                 resolve(null);
               }
             } catch (error) {
+              console.error('Error processing image:', error);
+              toast.error('Failed to process image');
               reject(error);
             }
           };
-          reader.onerror = reject;
+          reader.onerror = () => {
+            toast.error('Failed to read file');
+            reject(reader.error);
+          };
           reader.readAsDataURL(preview.file);
         });
       }
@@ -350,7 +364,8 @@ export function UploadArea({
       
       setTimeout(() => setUploadStatus('idle'), 3000);
     } catch (error) {
-      console.error('Failed to upload:', error);
+      console.error('Upload error:', error);
+      toast.error('Upload failed');
       setUploadStatus('error');
     } finally {
       setUploading(false);

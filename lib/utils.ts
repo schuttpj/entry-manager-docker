@@ -33,7 +33,7 @@ export const compressImage = async (
     maxSizeMB?: number;
   } = {}
 ): Promise<string> => {
-  const { maxWidth = 1920, quality = 0.8, maxSizeMB = 2 } = options;
+  const { maxWidth = 1920, quality = 0.85, maxSizeMB = 2.5 } = options;
 
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -96,4 +96,70 @@ const getBase64Size = (base64String: string): number => {
   const padding = (base64String.charAt(base64String.length - 2) === '=') ? 2 : 
                  (base64String.charAt(base64String.length - 1) === '=') ? 1 : 0;
   return (base64Length * 0.75) - padding;
+};
+
+export const generateThumbnail = async (
+  imageUrl: string,
+  options: {
+    maxWidth?: number;
+    quality?: number;
+    maxSizeMB?: number;
+  } = {}
+): Promise<string> => {
+  const { maxWidth = 800, quality = 0.95, maxSizeMB = 0.8 } = options;  // Increased quality to 95%, width to 800px
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    if (!imageUrl.startsWith('data:')) {
+      img.crossOrigin = "anonymous";
+    }
+    
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        
+        // Calculate new dimensions while maintaining aspect ratio
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Could not get canvas context"));
+          return;
+        }
+        
+        // Draw image with maximum quality settings for thumbnail
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Get initial compressed image
+        let compressedImage = canvas.toDataURL("image/jpeg", quality);
+        
+        // If maxSizeMB is specified, try to meet the size requirement
+        // but maintain higher minimum quality for thumbnails
+        if (maxSizeMB) {
+          let currentQuality = quality;
+          while (getBase64Size(compressedImage) > maxSizeMB * 1024 * 1024 && currentQuality > 0.8) {
+            currentQuality -= 0.05;  // More gradual quality reduction
+            compressedImage = canvas.toDataURL("image/jpeg", currentQuality);
+          }
+        }
+        
+        resolve(compressedImage);
+      } catch (err) {
+        reject(new Error(`Failed to generate thumbnail: ${err instanceof Error ? err.message : 'Unknown error'}`));
+      }
+    };
+    
+    img.onerror = () => reject(new Error("Failed to load image"));
+    img.src = imageUrl;
+  });
 };

@@ -115,129 +115,142 @@ function GridItem({
 
   return (
     <div
-      className={`relative group aspect-square rounded-lg overflow-hidden border ${
-        isDarkMode ? 'border-gray-700' : 'border-gray-200'
-      } hover:border-blue-500 transition-all cursor-pointer`}
-      onClick={(e) => {
-        if (!showQuickVoice) { // Only handle click if quick voice is not active
-          e.stopPropagation();
-          onImageClick(snag);
-        }
-      }}
+      className={`relative group cursor-pointer transition-all duration-200 ${
+        isDarkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-100'
+      }`}
       onMouseEnter={() => onHover(snag.id)}
       onMouseLeave={() => onHover(null)}
+      onClick={() => onImageClick(snag)}
     >
-      {/* Header Info */}
-      <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <div className="bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium">
-            #{snag.snagNumber}
-          </div>
-          {snag.status === 'Completed' && (
-            <div className="bg-green-500/90 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1">
-              <div className="w-1.5 h-1.5 rounded-full bg-white" />
-              Completed
+      {/* Image Container */}
+      <div className="aspect-square overflow-hidden relative">
+        {/* Use thumbnail for grid view */}
+        <img
+          src={snag.thumbnailPath}
+          alt={snag.name}
+          className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+        />
+
+        {/* Status Overlay */}
+        {snag.status === 'Completed' && (
+          <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center">
+            <div className="transform -rotate-45 text-white text-xl font-bold">
+              COMPLETED
             </div>
-          )}
-        </div>
-        
-        {/* Snag Name */}
-        <div className="flex items-center gap-2">
-          <div className={cn(
-            "bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium max-w-[200px] truncate",
-            "flex items-center gap-2"
-          )}>
-            <span className="truncate">{snag.name || 'Untitled Entry'}</span>
-            <button
-              onClick={async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                if (!snag.description) {
-                  toast.error('Add a description first to generate a name');
-                  return;
-                }
-
-                try {
-                  console.log('Generating name for description:', snag.description);
-                  const response = await fetch('/api/generate-name', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ description: snag.description }),
-                  });
-
-                  if (!response.ok) throw new Error('Failed to generate name');
-                  
-                  const { name } = await response.json();
-                  console.log('Generated name:', name);
-                  
-                  if (name && name !== snag.name) {
-                    const updatedSnag = {
-                      ...snag,
-                      name,
-                      updatedAt: new Date().toISOString()
-                    };
-                    console.log('Updating snag with new name:', updatedSnag);
-                    if (onSnagUpdate) {
-                      onSnagUpdate(updatedSnag);
-                      toast.success('Name updated successfully');
-                    }
-                  }
-                } catch (error) {
-                  console.error('Error generating name:', error);
-                  toast.error('Failed to generate name');
-                }
-              }}
-              className={cn(
-                "p-1 rounded-full hover:bg-white/20 transition-colors",
-                "focus:outline-none focus:ring-2 focus:ring-white/20"
-              )}
-              title="Generate name from description"
-            >
-              <Sparkles className="h-3.5 w-3.5 text-white/80" />
-            </button>
-            <button
-              onClick={handleVoiceClick}
-              className={cn(
-                "p-1 rounded-full hover:bg-white/20 transition-colors",
-                "focus:outline-none focus:ring-2 focus:ring-white/20"
-              )}
-              title="Double-click to record description"
-            >
-              <Mic className="h-3.5 w-3.5 text-white/80" />
-            </button>
           </div>
+        )}
+
+        {/* Hover Overlay */}
+        <div
+          className={`absolute inset-0 bg-black transition-opacity duration-200 ${
+            hoveredId === snag.id ? 'bg-opacity-40' : 'bg-opacity-0'
+          }`}
+        >
+          {/* Header Info */}
+          <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <div className="bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium">
+                #{snag.snagNumber}
+              </div>
+              {snag.status === 'Completed' && (
+                <div className="bg-green-500/90 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                  Completed
+                </div>
+              )}
+            </div>
+            
+            {/* Snag Name */}
+            <div className="flex items-center gap-2">
+              <div className={cn(
+                "bg-black/70 text-white px-3 py-1 rounded-full text-sm font-medium max-w-[200px] truncate",
+                "flex items-center gap-2"
+              )}>
+                <span className="truncate">{snag.name || 'Untitled Entry'}</span>
+                <button
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    if (!snag.description) {
+                      toast.error('Add a description first to generate a name');
+                      return;
+                    }
+
+                    try {
+                      console.log('Generating name for description:', snag.description);
+                      const response = await fetch('/api/generate-name', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ description: snag.description }),
+                      });
+
+                      if (!response.ok) throw new Error('Failed to generate name');
+                      
+                      const { name } = await response.json();
+                      console.log('Generated name:', name);
+                      
+                      if (name && name !== snag.name) {
+                        const updatedSnag = {
+                          ...snag,
+                          name,
+                          updatedAt: new Date().toISOString()
+                        };
+                        console.log('Updating snag with new name:', updatedSnag);
+                        if (onSnagUpdate) {
+                          onSnagUpdate(updatedSnag);
+                          toast.success('Name updated successfully');
+                        }
+                      }
+                    } catch (error) {
+                      console.error('Error generating name:', error);
+                      toast.error('Failed to generate name');
+                    }
+                  }}
+                  className={cn(
+                    "p-1 rounded-full hover:bg-white/20 transition-colors",
+                    "focus:outline-none focus:ring-2 focus:ring-white/20"
+                  )}
+                  title="Generate name from description"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-white/80" />
+                </button>
+                <button
+                  onClick={handleVoiceClick}
+                  className={cn(
+                    "p-1 rounded-full hover:bg-white/20 transition-colors",
+                    "focus:outline-none focus:ring-2 focus:ring-white/20"
+                  )}
+                  title="Double-click to record description"
+                >
+                  <Mic className="h-3.5 w-3.5 text-white/80" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Details Button */}
+          <button
+            onClick={(e) => onDetailsClick(e, snag)}
+            className={cn(
+              "absolute top-3 right-3 z-10 p-2 rounded-full transition-all duration-300 transform",
+              hoveredId === snag.id 
+                ? "scale-100 rotate-0 bg-white/90 hover:bg-white" 
+                : "scale-0 rotate-180 bg-white/70",
+              isDarkMode && hoveredId === snag.id && "bg-gray-800/90 hover:bg-gray-800"
+            )}
+          >
+            <Info className={cn(
+              "h-5 w-5 transition-transform duration-300",
+              isDarkMode ? "text-white" : "text-gray-800",
+              hoveredId === snag.id && "animate-pulse"
+            )} />
+          </button>
         </div>
       </div>
 
-      {/* Details Button */}
-      <button
-        onClick={(e) => onDetailsClick(e, snag)}
-        className={cn(
-          "absolute top-3 right-3 z-10 p-2 rounded-full transition-all duration-300 transform",
-          hoveredId === snag.id 
-            ? "scale-100 rotate-0 bg-white/90 hover:bg-white" 
-            : "scale-0 rotate-180 bg-white/70",
-          isDarkMode && hoveredId === snag.id && "bg-gray-800/90 hover:bg-gray-800"
-        )}
-      >
-        <Info className={cn(
-          "h-5 w-5 transition-transform duration-300",
-          isDarkMode ? "text-white" : "text-gray-800",
-          hoveredId === snag.id && "animate-pulse"
-        )} />
-      </button>
-
-      <Image
-        src={snag.photoPath}
-        alt={snag.description || 'Snag image'}
-        fill
-        className="object-cover group-hover:scale-105 transition-transform duration-200"
-        sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-      />
-      
       {/* Description Overlay */}
       <div className={`absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4`}>
         <p className="text-white text-sm line-clamp-2">
