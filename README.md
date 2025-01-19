@@ -76,6 +76,58 @@ A powerful, locally-hosted application for managing and organizing entry lists w
 
 ## 🚀 Getting Started
 
+### Quick Start (Using Pre-built Image)
+If someone shared the Docker image with you:
+
+1. **Install Docker Desktop** only
+   - Download from: https://www.docker.com/products/docker-desktop
+   - Install and start Docker Desktop
+
+2. **Load the Image**
+   ```bash
+   # If you received a .tar file:
+   docker load < entry-manager.tar
+   
+   # OR if it's on Docker Hub:
+   docker pull username/entry-manager:latest
+   ```
+
+3. **Create Project Directory and Setup**
+   ```bash
+   # Create directory for data
+   mkdir entry-manager
+   cd entry-manager
+   
+   # Download the simple compose file
+   curl -O https://raw.githubusercontent.com/yourusername/entry-manager-docker/main/docker-compose.simple.yml
+   
+   # Create environment file
+   curl -O https://raw.githubusercontent.com/yourusername/entry-manager-docker/main/.env.simple.example
+   copy .env.simple.example .env.local    # Windows
+   # or
+   cp .env.simple.example .env.local      # Mac/Linux
+   ```
+
+4. **Configure API Key (Optional)**
+   - Open `.env.local` in a text editor
+   - Add your OpenAI API key if you want voice features
+   - Save the file
+   - The app works without an API key, but voice features will be disabled
+
+5. **Start the Application**
+   ```bash
+   # Start the container
+   docker-compose -f docker-compose.simple.yml up -d
+   ```
+
+6. **Access the Application**
+   - Open http://localhost:3000 in your browser
+   - All data is stored locally in the `public` folder
+   - Voice features will work if you added an API key
+
+### Full Installation (Building from Source)
+If you want to build the image yourself:
+
 ### 1. Required Software
 Before you begin, you'll need to install these applications:
 
@@ -144,9 +196,20 @@ npm clean-install --legacy-peer-deps
    ```bash
    # Build and start the container
    docker-compose up -d
+   ```
 
-   # Check if it's running (optional)
-   docker-compose ps
+   > **Note:** The first time you run this command, Docker will build the image which can take 10-15 minutes. 
+   > This happens only once. After that, starting the container takes just a few seconds.
+
+3. You can watch the build progress with:
+   ```bash
+   # View the logs while building/starting
+   docker-compose logs -f
+   ```
+
+4. The application is ready when you see:
+   ```
+   entry-manager-docker-app-1  | Ready - started server on 0.0.0.0:3000
    ```
 
 #### F. Access the Application

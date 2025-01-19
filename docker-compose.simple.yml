@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  app:
+    # Replace with your Docker Hub username if using Docker Hub
+    image: entry-manager-docker-app
+    ports:
+      - "3000:3000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - NEXT_PUBLIC_OPENAI_API_KEY=${NEXT_PUBLIC_OPENAI_API_KEY}
+    volumes:
+      - ./public/uploads:/app/public/uploads
+      - ./public/exports:/app/public/exports
+      - ./public/backups:/app/public/backups
+      - app-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  app-data:
+    driver: local 
