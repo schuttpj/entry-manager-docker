@@ -15,7 +15,11 @@ if "%1"=="ERROR" (
     echo Cleaning up...
     if exist .env.local del .env.local
     if exist docker-compose.yml del docker-compose.yml
+    echo Setup failed. Please try again.
+    pause
+    exit /b 1
 )
+goto :EOF
 
 :CHECK_DOCKER
 REM Check if Docker is installed
@@ -34,7 +38,7 @@ if %errorlevel% neq 0 (
     choice /M "Have you installed Docker Desktop and is it running now"
     if errorlevel 2 (
         echo Setup cancelled. Please run the script again after installing Docker Desktop.
-        goto CLEANUP ERROR
+        call :CLEANUP ERROR
         exit /b 1
     )
     goto CHECK_DOCKER
@@ -51,7 +55,7 @@ if %errorlevel% neq 0 (
     choice /M "Is Docker Desktop running now"
     if errorlevel 2 (
         echo Setup cancelled. Please run the script again after starting Docker Desktop.
-        goto CLEANUP ERROR
+        call :CLEANUP ERROR
         exit /b 1
     )
     goto CHECK_DOCKER
@@ -71,7 +75,7 @@ if not errorlevel 1 (
     echo.
     choice /M "Do you want to continue anyway"
     if errorlevel 2 (
-        goto CLEANUP ERROR
+        call :CLEANUP ERROR
         exit /b 1
     )
 )
@@ -110,12 +114,14 @@ if /i "%ADD_KEY%"=="Y" (
     echo Saving API key to .env.local...
     
     REM Direct file write approach
-    echo OPENAI_API_KEY=%API_KEY%> .env.local
-    echo NEXT_PUBLIC_OPENAI_API_KEY=%API_KEY%>> .env.local
+    (
+    echo OPENAI_API_KEY=%API_KEY%
+    echo NEXT_PUBLIC_OPENAI_API_KEY=%API_KEY%
+    ) > .env.local
     
     if %errorlevel% neq 0 (
         echo Error: Failed to save API key to .env.local
-        goto CLEANUP ERROR
+        call :CLEANUP ERROR
         exit /b 1
     )
     echo API key has been saved successfully!
@@ -157,7 +163,7 @@ if %errorlevel% neq 0 (
     echo.
     echo Error: Failed to download Docker image.
     echo Please check your internet connection and try again.
-    goto CLEANUP ERROR
+    call :CLEANUP ERROR
     exit /b 1
 )
 echo Docker image downloaded successfully!
@@ -170,7 +176,7 @@ if %errorlevel% neq 0 (
     echo.
     echo Error: Failed to start the application.
     echo Please try running 'docker-compose up -d' manually.
-    goto CLEANUP ERROR
+    call :CLEANUP ERROR
     exit /b 1
 )
 
