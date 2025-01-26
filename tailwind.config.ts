@@ -10,6 +10,10 @@ const config: Config = {
   ],
   theme: {
   	extend: {
+      backgroundImage: {
+        'grid-black': "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(0 0 0 / 0.04)'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e\")",
+        'grid-white': "url(\"data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(255 255 255 / 0.04)'%3e%3cpath d='M0 .5H31.5V32'/%3e%3c/svg%3e\")",
+      },
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
@@ -83,11 +87,22 @@ const config: Config = {
   				to: {
   					height: '0'
   				}
-  			}
+  			},
+  			"skew-scroll": {
+  				"0%": { transform: "translateY(0)" },
+  				"100%": { transform: "translateY(-50%)" }
+  			},
+        gradient: {
+          "0%": { backgroundPosition: "0% 50%" },
+          "50%": { backgroundPosition: "100% 50%" },
+          "100%": { backgroundPosition: "0% 50%" },
+        }
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
+  			'accordion-up': 'accordion-up 0.2s ease-out',
+  			"skew-scroll": "skew-scroll 20s linear infinite",
+        "gradient": "gradient 8s ease infinite",
   		}
   	}
   },
