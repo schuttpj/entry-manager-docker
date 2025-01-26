@@ -63,9 +63,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 RUN mkdir -p /app/public/uploads \
     && mkdir -p /app/public/exports \
     && mkdir -p /app/public/backups \
+    && mkdir -p /app/.next/cache/indexeddb \
     && chown nextjs:nodejs /app/public/uploads \
     && chown nextjs:nodejs /app/public/exports \
-    && chown nextjs:nodejs /app/public/backups
+    && chown nextjs:nodejs /app/public/backups \
+    && chown nextjs:nodejs /app/.next/cache/indexeddb
 
 USER nextjs
 

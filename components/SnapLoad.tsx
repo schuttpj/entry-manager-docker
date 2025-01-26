@@ -9,6 +9,14 @@ import { cn } from '@/lib/utils';
 import { Maximize, Mic, MicOff, Sparkles, FolderOpen, Save, Check, AlertCircle, PencilLine, BookmarkPlus, X } from 'lucide-react';
 import { Input } from './ui/input';
 
+// Add webkitdirectory to HTMLInputElement
+declare module 'react' {
+  interface InputHTMLAttributes<T> extends HTMLAttributes<T> {
+    webkitdirectory?: string;
+    directory?: string;
+  }
+}
+
 // Debug logger function
 const debug = (component: string, action: string, data?: any) => {
   console.log(`[SnapLoad:${component}] ${action}`, data ? data : '');
@@ -676,26 +684,31 @@ export function SnapLoad({ projectName, onComplete, isDarkMode = false }: SnapLo
                       </div>
 
                       {/* Annotation List */}
-                      {batchImages.find(img => img.id === selectedImageId)?.annotations.length > 0 && (
-                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
-                          <h4 className="text-sm font-medium mb-2">Annotations</h4>
-                          <div className="space-y-2">
-                            {batchImages.find(img => img.id === selectedImageId)?.annotations.map((annotation: any, index: number) => (
-                              <div 
-                                key={annotation.id || index}
-                                className="flex items-start gap-2 text-sm"
-                              >
-                                <div className="w-4 h-4 bg-blue-500/60 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-medium mt-0.5">
-                                  {index + 1}
+                      {(() => {
+                        const selectedImage = batchImages.find(img => img.id === selectedImageId);
+                        if (!selectedImage || !selectedImage.annotations.length) return null;
+                        
+                        return (
+                          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                            <h4 className="text-sm font-medium mb-2">Annotations</h4>
+                            <div className="space-y-2">
+                              {selectedImage.annotations.map((annotation: any, index: number) => (
+                                <div 
+                                  key={annotation.id || index}
+                                  className="flex items-start gap-2 text-sm"
+                                >
+                                  <div className="w-4 h-4 bg-blue-500/60 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-medium mt-0.5">
+                                    {index + 1}
+                                  </div>
+                                  <span className="text-gray-700 dark:text-gray-300">
+                                    {annotation.text}
+                                  </span>
                                 </div>
-                                <span className="text-gray-700 dark:text-gray-300">
-                                  {annotation.text}
-                                </span>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {/* Input Controls */}
                       <div className="space-y-3">

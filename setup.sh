@@ -1,5 +1,5 @@
 #!/bin/bash
-echo "Setting up Entry Manager..."
+echo "Setting up Grid View Project Companion..."
 
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
@@ -9,21 +9,19 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-# Check for .env.example
-if [ ! -f .env.example ]; then
-    echo "Error: .env.example file not found!"
-    echo "Please make sure you're running this script in the correct directory."
-    exit 1
-fi
-
 # Create directories
 echo "Creating required directories..."
-if ! mkdir -p public/uploads public/exports public/backups; then
-    echo "Warning: Some directories could not be created. They might already exist."
-fi
+mkdir -p public/uploads public/exports public/backups
+
+# Create .env.example
+echo "Creating environment file..."
+cat > .env.example << EOL
+# OpenAI API Key for voice features (optional)
+OPENAI_API_KEY=your_api_key_here
+NEXT_PUBLIC_OPENAI_API_KEY=your_api_key_here
+EOL
 
 # Copy .env.example to .env.local
-echo
 echo "Creating .env.local from template..."
 cp .env.example .env.local
 
@@ -74,14 +72,13 @@ else
     echo "You can add your API key later by editing .env.local"
 fi
 
-# Create docker-compose.yml if it doesn't exist
-if [ ! -f docker-compose.yml ]; then
-    echo "Creating docker-compose.yml..."
-    cat > docker-compose.yml << EOL
+# Create docker-compose.yml
+echo "Creating docker-compose.yml..."
+cat > docker-compose.yml << EOL
 version: '3.8'
 services:
   app:
-    image: schuttpj1986/entry-manager:latest
+    image: schuttpj1986/grid-view-project-companion:latest
     ports:
       - "3000:3000"
     volumes:
@@ -89,18 +86,20 @@ services:
       - ./public/uploads:/app/public/uploads
       - ./public/exports:/app/public/exports
       - ./public/backups:/app/public/backups
+      - indexeddb-data:/app/.next/cache/indexeddb
       - app-data:/app/data
     restart: unless-stopped
 volumes:
   app-data:
     driver: local
+  indexeddb-data:
+    driver: local
 EOL
-fi
 
 echo
 echo "Downloading Docker image..."
 echo "This might take a few minutes depending on your internet connection..."
-if ! docker pull schuttpj1986/entry-manager:latest; then
+if ! docker pull schuttpj1986/grid-view-project-companion:latest; then
     echo
     echo "Error: Failed to download Docker image."
     echo "Please check your internet connection and try again."

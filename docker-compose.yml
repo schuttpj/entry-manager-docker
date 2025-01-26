@@ -16,9 +16,12 @@ services:
       - ./public/uploads:/app/public/uploads
       - ./public/exports:/app/public/exports
       - ./public/backups:/app/public/backups
+      - indexeddb-data:/app/.next/cache/indexeddb
       - app-data:/app/data
     restart: unless-stopped
 
 volumes:
   app-data:
+    driver: local
+  indexeddb-data:
     driver: local 

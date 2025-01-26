@@ -114,43 +114,7 @@ export async function getDB(): Promise<IDBPDatabase<SnagListDB>> {
         const voiceStore = db.createObjectStore('voiceRecordings', { keyPath: 'id' });
         voiceStore.createIndex('by-project', 'projectName');
 
-        // Add sample data using the version change transaction
-        const projectId = crypto.randomUUID();
-        const now = new Date();
-
-        try {
-          // Add project using the existing transaction
-          await projectStore.add({
-            id: projectId,
-            name: 'Sample Project',
-            createdAt: now,
-            updatedAt: now
-          });
-
-          // Add sample snag using the existing transaction
-          await snagStore.add({
-            id: crypto.randomUUID(),
-            projectName: 'Sample Project',
-            snagNumber: 1,
-            name: 'Sample Entry',
-            description: 'This is a sample entry to demonstrate the application functionality.',
-            photoPath: '/placeholder.jpg',
-            thumbnailPath: '/placeholder-thumb.jpg',
-            priority: 'Medium' as const,
-            assignedTo: 'Demo User',
-            status: 'In Progress' as const,
-            location: 'General',
-            createdAt: now,
-            updatedAt: now,
-            completionDate: null,
-            observationDate: now,
-            annotations: []
-          });
-
-          console.log('✅ Sample data added successfully');
-        } catch (error) {
-          console.error('❌ Error adding sample data:', error);
-        }
+        console.log('✅ Database stores created successfully');
       },
     });
 
