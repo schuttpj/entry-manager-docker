@@ -6,7 +6,7 @@ import { addSnag, updateSnag } from '@/lib/db';
 import { generateThumbnail } from '@/lib/utils';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Maximize, Mic, MicOff, Sparkles, FolderOpen, Save, Check, AlertCircle, PencilLine, BookmarkPlus } from 'lucide-react';
+import { Maximize, Mic, MicOff, Sparkles, FolderOpen, Save, Check, AlertCircle, PencilLine, BookmarkPlus, X } from 'lucide-react';
 import { Input } from './ui/input';
 
 // Debug logger function
@@ -517,109 +517,122 @@ export function SnapLoad({ projectName, onComplete, isDarkMode = false }: SnapLo
     }
   };
 
-  if (batchImages.length > 0) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-        <div className="bg-white dark:bg-gray-800 rounded-lg w-[95vw] h-[90vh] flex flex-col">
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-            <h2 className="text-lg font-semibold">Location: {location}</h2>
-            <Button
-              onClick={saveAllToDatabase}
-              disabled={isSaving}
-              className="flex items-center gap-2"
-            >
-              <Save className="w-4 h-4" />
-              <span>{isSaving ? 'Saving...' : 'Save All'}</span>
-            </Button>
-          </div>
-          
-          <div className="flex-1 flex">
-            {/* Grid of images */}
-            <div className="w-1/4 p-4 overflow-y-auto border-r border-gray-200 dark:border-gray-700">
-              <div className="grid grid-cols-2 gap-2">
-                {batchImages.map((image) => (
-                  <div
-                    key={image.id}
-                    onClick={() => handleImageSelect(image.id)}
-                    className={cn(
-                      "relative aspect-square cursor-pointer rounded-lg overflow-hidden group",
-                      selectedImageId === image.id ? "ring-2 ring-blue-500" : ""
-                    )}
-                  >
-                    {/* Thumbnail Image */}
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={image.dataUrl}
-                      alt={image.name}
-                      className="object-cover w-full h-full"
-                    />
-                    
-                    {/* Status Indicators (Always Visible) */}
-                    <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
-                      {image.annotations.length > 0 && (
-                        <span className="bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded-full shadow-md">
-                          {image.annotations.length} ⚡
-                        </span>
-                      )}
-                      {image.isSaved ? (
-                        <span className="bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full shadow-md flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Saved
-                        </span>
-                      ) : image.description || image.annotations.length > 0 ? (
-                        <span className="bg-yellow-500 text-white text-xs px-1.5 py-0.5 rounded-full shadow-md flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" /> Unsaved
-                        </span>
-                      ) : null}
-                    </div>
-                    
-                    {/* Hover Metadata Overlay */}
-                    <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity p-2 flex flex-col justify-between">
-                      <div className="text-white text-xs truncate">
-                        {image.name || 'Unnamed'}
-                      </div>
-                      {image.description && (
-                        <div className="text-white text-xs truncate">
-                          {image.description}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+  return (
+    <div className="fixed inset-0 z-50 bg-black/75 overflow-hidden">
+      <div className="h-screen w-full bg-white dark:bg-gray-900 flex flex-col">
+        {/* Header - Fixed at top */}
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">{projectName}</h2>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={saveAllToDatabase}
+                variant="default"
+                className="gap-2"
+                disabled={isSaving}
+              >
+                <Save className="w-4 h-4" />
+                {isSaving ? 'Saving...' : 'Save All'}
+              </Button>
+              <Button
+                onClick={onComplete}
+                variant="ghost"
+                size="icon"
+                className="ml-2"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                webkitdirectory=""
+                directory=""
+                className="hidden"
+                onChange={handleFolderSelect}
+              />
             </div>
+          </div>
+        </div>
 
-            {/* Selected image with annotation */}
-            <div className="flex-1 relative overflow-hidden">
-              {selectedImageId && (
-                isAnnotating ? (
-                  <div className="h-full">
-                    <ImageAnnotator
-                      imageUrl={batchImages.find(img => img.id === selectedImageId)?.dataUrl || ''}
-                      existingAnnotations={batchImages.find(img => img.id === selectedImageId)?.annotations || []}
-                      onSave={handleAnnotationSave}
-                      onClose={() => setIsAnnotating(false)}
-                    />
-                  </div>
-                ) : (
-                  <div className="h-full flex flex-col">
-                    <div className="flex-1 relative p-4 flex items-center justify-center overflow-hidden">
-                      <div className="relative max-h-full max-w-full">
-                        {/* Main Image */}
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {/* Main Content - Scrollable */}
+        <div className="flex-1 overflow-auto">
+          {batchImages.length > 0 ? (
+            <div className="flex h-full">
+              {/* Grid of images */}
+              <div className="w-1/3 p-4 overflow-y-auto border-r border-gray-200 dark:border-gray-700">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {batchImages.map((image) => (
+                    <div
+                      key={image.id}
+                      onClick={() => handleImageSelect(image.id)}
+                      className={cn(
+                        "relative aspect-square cursor-pointer rounded-lg overflow-hidden group hover:ring-2 hover:ring-blue-500/50",
+                        selectedImageId === image.id ? "ring-2 ring-blue-500" : "",
+                        isDarkMode ? "bg-gray-800" : "bg-gray-100"
+                      )}
+                    >
+                      <img
+                        src={image.dataUrl}
+                        alt={image.name}
+                        className="w-full h-full object-cover transition-all duration-200 group-hover:scale-105"
+                      />
+                      
+                      {/* Status Indicators */}
+                      <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
+                        {image.annotations.length > 0 && (
+                          <span className="bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded-full shadow-md">
+                            {image.annotations.length} ⚡
+                          </span>
+                        )}
+                        {image.isSaved ? (
+                          <span className="bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full shadow-md flex items-center gap-1">
+                            <Check className="w-3 h-3" /> Saved
+                          </span>
+                        ) : (image.description || image.annotations.length > 0) ? (
+                          <span className="bg-yellow-500 text-white text-xs px-1.5 py-0.5 rounded-full shadow-md flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" /> Unsaved
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {/* Hover Metadata Overlay */}
+                      <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity p-2 flex flex-col justify-between">
+                        <div className="text-white text-xs truncate">
+                          {image.name || 'Unnamed'}
+                        </div>
+                        {image.description && (
+                          <div className="text-white text-xs truncate">
+                            {image.description}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Details Panel */}
+              <div className="flex-1 p-4 overflow-y-auto">
+                {selectedImageId && (
+                  isAnnotating ? (
+                    <div className="h-full">
+                      <ImageAnnotator
+                        imageUrl={batchImages.find(img => img.id === selectedImageId)?.dataUrl || ''}
+                        existingAnnotations={batchImages.find(img => img.id === selectedImageId)?.annotations || []}
+                        onSave={handleAnnotationSave}
+                        onClose={() => setIsAnnotating(false)}
+                      />
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Image Preview */}
+                      <div className="aspect-[4/3] relative rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800">
                         <img
                           src={batchImages.find(img => img.id === selectedImageId)?.dataUrl}
-                          alt={name}
-                          className="max-h-[calc(85vh-16rem)] w-auto object-contain"
+                          alt="Selected"
+                          className="w-full h-full object-contain"
                         />
-
-                        {/* Metadata Overlay */}
-                        <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-4 text-white">
-                          <h3 className="text-lg font-semibold mb-1">{name || 'Unnamed'}</h3>
-                          {description && (
-                            <p className="text-sm opacity-90 line-clamp-2">{description}</p>
-                          )}
-                        </div>
-
+                        
                         {/* Annotation Preview Overlay */}
                         <div className="absolute inset-0 pointer-events-none">
                           {batchImages.find(img => img.id === selectedImageId)?.annotations.map((annotation: any, index: number) => (
@@ -639,36 +652,8 @@ export function SnapLoad({ projectName, onComplete, isDarkMode = false }: SnapLo
                           ))}
                         </div>
 
-                        {/* Annotation List */}
-                        <div className="absolute bottom-4 left-4 max-w-[200px] bg-white/30 dark:bg-gray-800/30 backdrop-blur-[2px] rounded-lg shadow-sm p-1.5 text-xs">
-                          {batchImages.find(img => img.id === selectedImageId)?.annotations.length ? (
-                            <div className="space-y-1">
-                              {batchImages.find(img => img.id === selectedImageId)?.annotations.map((annotation: any, index: number) => (
-                                <div 
-                                  key={annotation.id || index}
-                                  className="flex items-start gap-1.5 p-0.5 hover:bg-white/10 dark:hover:bg-black/10 rounded"
-                                  onMouseEnter={() => {
-                                    // Could add hover effect on the marker
-                                  }}
-                                >
-                                  <div className="w-3 h-3 bg-blue-500/60 rounded-full flex-shrink-0 flex items-center justify-center text-white text-[10px] font-medium">
-                                    {index + 1}
-                                  </div>
-                                  <span className="text-gray-900/90 dark:text-white/90 text-[10px] leading-tight font-semibold">
-                                    {annotation.text}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-gray-500/70 dark:text-gray-400/70 text-center py-0.5 text-[10px]">
-                              No annotations yet
-                            </div>
-                          )}
-                        </div>
-
                         {/* Action Buttons */}
-                        <div className="absolute top-4 right-4 flex gap-2 z-10">
+                        <div className="absolute top-4 right-4 flex gap-2">
                           <Button
                             onClick={saveCurrentEntry}
                             variant="default"
@@ -689,35 +674,31 @@ export function SnapLoad({ projectName, onComplete, isDarkMode = false }: SnapLo
                           </Button>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Bottom Controls */}
-                    <div className="p-4 border-t border-gray-200 dark:border-gray-700 flex flex-col gap-3 bg-white dark:bg-gray-800">
-                      {/* Status Bar */}
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-sm text-gray-500 flex items-center gap-2">
-                          {batchImages.find(img => img.id === selectedImageId)?.isSaved ? (
-                            <>
-                              <Check className="w-4 h-4 text-green-500" />
-                              Last saved: {batchImages.find(img => img.id === selectedImageId)?.lastSaved?.toLocaleString()}
-                            </>
-                          ) : (
-                            <>
-                              <AlertCircle className="w-4 h-4 text-yellow-500" />
-                              Not saved yet
-                            </>
-                          )}
+                      {/* Annotation List */}
+                      {batchImages.find(img => img.id === selectedImageId)?.annotations.length > 0 && (
+                        <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3">
+                          <h4 className="text-sm font-medium mb-2">Annotations</h4>
+                          <div className="space-y-2">
+                            {batchImages.find(img => img.id === selectedImageId)?.annotations.map((annotation: any, index: number) => (
+                              <div 
+                                key={annotation.id || index}
+                                className="flex items-start gap-2 text-sm"
+                              >
+                                <div className="w-4 h-4 bg-blue-500/60 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-medium mt-0.5">
+                                  {index + 1}
+                                </div>
+                                <span className="text-gray-700 dark:text-gray-300">
+                                  {annotation.text}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-500 flex items-center gap-1">
-                          <span className="font-medium">
-                            {batchImages.find(img => img.id === selectedImageId)?.annotations.length}
-                          </span>
-                          annotations
-                        </div>
-                      </div>
+                      )}
 
                       {/* Input Controls */}
-                      <div className="grid gap-3 max-w-3xl mx-auto w-full">
+                      <div className="space-y-3">
                         <div className="flex items-center gap-3">
                           <Input
                             value={name}
@@ -745,6 +726,7 @@ export function SnapLoad({ projectName, onComplete, isDarkMode = false }: SnapLo
                             <Sparkles className="h-4 w-4" />
                           </Button>
                         </div>
+
                         <div className="flex items-center gap-3">
                           <Input
                             value={description}
@@ -769,46 +751,64 @@ export function SnapLoad({ projectName, onComplete, isDarkMode = false }: SnapLo
                             )}
                           >
                             {isRecording ? (
-                              <MicOff className="h-4 h-4" />
+                              <MicOff className="h-4 w-4" />
                             ) : (
                               <Mic className="h-4 w-4" />
                             )}
                           </Button>
                         </div>
                       </div>
+
+                      {/* Status Bar */}
+                      <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 border-t dark:border-gray-700 pt-3">
+                        <div className="flex items-center gap-2">
+                          {batchImages.find(img => img.id === selectedImageId)?.isSaved ? (
+                            <>
+                              <Check className="w-4 h-4 text-green-500" />
+                              Last saved: {batchImages.find(img => img.id === selectedImageId)?.lastSaved?.toLocaleString()}
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle className="w-4 h-4 text-yellow-500" />
+                              Not saved yet
+                            </>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="font-medium">
+                            {batchImages.find(img => img.id === selectedImageId)?.annotations.length}
+                          </span>
+                          annotations
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                )
-              )}
+                  )
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <div className="text-center space-y-4">
+                <FolderOpen className="w-12 h-12 mx-auto text-gray-400" />
+                <div className="space-y-2">
+                  <h3 className="text-lg font-medium">No Images Selected</h3>
+                  <p className="text-sm text-gray-500">
+                    Select a folder to begin processing images
+                  </p>
+                </div>
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  variant="outline"
+                  className="gap-2"
+                >
+                  <FolderOpen className="w-4 h-4" />
+                  Select Folder
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-    );
-  }
-
-  return (
-    <>
-      <input
-        type="file"
-        // @ts-ignore
-        webkitdirectory=""
-        // @ts-ignore
-        directory=""
-        ref={fileInputRef}
-        className="hidden"
-        onChange={handleFolderSelect}
-      />
-      <Button
-        onClick={() => fileInputRef.current?.click()}
-        className={cn(
-          "relative flex items-center gap-2",
-          isDarkMode ? "hover:bg-gray-700" : "hover:bg-gray-100"
-        )}
-      >
-        <FolderOpen className="w-4 h-4" />
-        <span>Select Folder</span>
-      </Button>
-    </>
+    </div>
   );
 } 

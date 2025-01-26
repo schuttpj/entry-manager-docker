@@ -29,7 +29,6 @@ import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import confetti from 'canvas-confetti';
 import { toast } from 'sonner';
-import { SnapLoad } from './SnapLoad';
 
 interface EditState {
   description: string;
@@ -505,33 +504,36 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
     }
   }, []);
 
+  const handleBackupReminder = () => {
+    const lastBackup = localStorage.getItem(LAST_BACKUP_KEY);
+    const now = Date.now();
+    
+    if (!lastBackup || (now - Number(lastBackup)) > BACKUP_REMINDER_INTERVAL) {
+      const minutesPassed = lastBackup ? Math.floor((now - Number(lastBackup)) / (60 * 1000)) : 0;
+      const timeMessage = lastBackup 
+        ? `It has been ${minutesPassed} minutes since your last backup.`
+        : 'You haven\'t created a backup yet.';
+        
+      toast('Backup Reminder', {
+        description: `${timeMessage} Consider backing up your data to prevent any loss.`,
+        action: {
+          label: 'Backup Now',
+          onClick: handleBackupClick
+        },
+        duration: 2000, // Auto-dismiss after 2 seconds
+        className: 'group relative',
+        dismissible: true // Ensures the toast can be manually dismissed
+      });
+    }
+  };
+
   // Add backup reminder check
   useEffect(() => {
-    const checkBackupReminder = () => {
-      const lastBackup = localStorage.getItem(LAST_BACKUP_KEY);
-      const now = Date.now();
-      
-      if (!lastBackup || (now - Number(lastBackup)) > BACKUP_REMINDER_INTERVAL) {
-        const minutesPassed = lastBackup ? Math.floor((now - Number(lastBackup)) / (60 * 1000)) : 0;
-        const timeMessage = lastBackup 
-          ? `It has been ${minutesPassed} minutes since your last backup.`
-          : 'You haven\'t created a backup yet.';
-          
-        toast('Backup Reminder', {
-          description: `${timeMessage} Consider backing up your data to prevent any loss.`,
-          action: {
-            label: 'Backup Now',
-            onClick: handleBackupClick
-          }
-        });
-      }
-    };
-
     // Check on component mount and when project changes
-    checkBackupReminder();
+    handleBackupReminder();
 
-    // Also set up a periodic check
-    const intervalId = setInterval(checkBackupReminder, BACKUP_REMINDER_INTERVAL);
+    // Set up a periodic check every 30 minutes
+    const intervalId = setInterval(handleBackupReminder, BACKUP_REMINDER_INTERVAL);
 
     return () => clearInterval(intervalId);
   }, [projectName, handleBackupClick]);
@@ -620,11 +622,6 @@ export function SnagList({ projectName, refreshTrigger = 0, isDarkMode = false, 
           </div>
 
           <div className="flex items-center gap-2">
-            <SnapLoad
-              projectName={projectName}
-              onComplete={handleUploadComplete}
-              isDarkMode={isDarkMode}
-            />
             <div className="flex border rounded-md">
               <Button
                 variant="ghost"

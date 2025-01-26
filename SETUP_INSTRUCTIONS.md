@@ -1,63 +1,54 @@
-# Entry Manager - Quick Setup Guide
+# Entry Manager - Simple Installation Guide
 
-## 1. Install Docker Desktop
-- Download from: https://www.docker.com/products/docker-desktop
-- Install and start Docker Desktop
-- Wait until Docker Desktop says "Running"
+## Step 1: Install Docker Desktop
+1. Download Docker Desktop from https://www.docker.com/products/docker-desktop
+2. Install Docker Desktop
+3. Start Docker Desktop and wait until you see "Docker Desktop is running" in the system tray
 
-## 2. Download Files
-Download these files to a new folder on your computer:
-- Windows users: `setup.bat`
-- Mac/Linux users: `setup.sh`
+## Step 2: Create Installation Folder
+1. Open File Explorer
+2. Create a new folder called `entry-manager` (e.g., at `C:\entry-manager`)
 
-## 3. Run Setup Script
+## Step 3: Download Setup Files
+1. Download these two files into your `entry-manager` folder:
+   - `setup.bat`
+   - `.env.example`
 
-### Windows Users:
-1. Create a new folder (e.g., `C:\entry-manager`)
-2. Copy `setup.bat` into this folder
-3. Double-click `setup.bat`
-   - If Windows warns about security, click "More info" then "Run anyway"
-4. Follow the prompts to add your OpenAI API key (optional)
-5. Wait while the script downloads the Docker image (this may take a few minutes)
+## Step 4: Run Setup
+1. Double-click `setup.bat`
+2. If Windows shows a security warning:
+   - Click "More info"
+   - Click "Run anyway"
+3. When asked about adding an OpenAI API key:
+   - Option 1: Type `Y` and press Enter, then paste your API key
+   - Option 2: Type `N` and press Enter to skip (you can add it later)
+4. Wait while the script downloads the Docker image
+   - This takes about 5-10 minutes on first run
+   - You'll see a "Setup complete!" message when done
 
-### Mac/Linux Users:
-1. Create a new folder:
-   ```bash
-   mkdir entry-manager
-   cd entry-manager
+## Step 5: Start the App
+1. After setup completes, type this command:
    ```
-2. Copy `setup.sh` into this folder
-3. Open Terminal in this folder and run:
-   ```bash
-   chmod +x setup.sh
-   ./setup.sh
-   ```
-4. Follow the prompts to add your OpenAI API key (optional)
-5. Wait while the script downloads the Docker image (this may take a few minutes)
-
-## 4. Start the Application
-1. In the same folder, run:
-   ```bash
    docker-compose up -d
    ```
 2. Open your web browser
 3. Go to: http://localhost:3000
 
 ## Notes
-- All your data is stored locally in the `public` folder
 - The app works offline once started
+- All data is stored on your computer
 - Voice features only work if you added an API key
-- Need an API key? Get one from: https://platform.openai.com/api-keys
-- Want to change your API key later? Edit `.env.local` in your folder
+- Need help? Contact [Your Contact Info]
 
 ## Troubleshooting
 
 ### Docker Image Download
 - If the image download fails, check your internet connection
 - The download might take several minutes depending on your connection speed
-- You can manually download the image by running: `docker pull yourusername/entry-manager:latest`
+- You can manually download the image by running: `docker pull schuttpj1986/entry-manager:latest`
 
 ### API Key Issues
-- If you skipped adding the API key during setup, you can add it later
+- If you skipped adding the API key during setup, you can add it later by editing `.env.local`
 - Voice features won't work until you add a valid API key
-- The API key should start with 'sk-' and be about 51 characters long 
+- The API key should start with 'sk-' and be about 51 characters long
+- Get an API key from: https://platform.openai.com/api-keys 
