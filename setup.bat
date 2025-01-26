@@ -1,14 +1,79 @@
 @echo off
-echo Setting up Grid View Project Companion...
+setlocal EnableDelayedExpansion
 
+REM Grid View Project Companion Setup
+REM Version 1.0.0
+REM This script will set up the Grid View Project Companion application
+
+echo Setting up Grid View Project Companion...
+echo Version 1.0.0
+
+REM Cleanup function
+:CLEANUP
+if "%1"=="ERROR" (
+    echo.
+    echo Cleaning up...
+    if exist .env.local del .env.local
+    if exist docker-compose.yml del docker-compose.yml
+)
+
+:CHECK_DOCKER
 REM Check if Docker is installed
 docker --version > nul 2>&1
 if %errorlevel% neq 0 (
-    echo Error: Docker is not installed or not running.
-    echo Please install Docker Desktop from https://www.docker.com/products/docker-desktop
-    echo and make sure it is running before continuing.
-    pause
-    exit /b 1
+    echo Docker is not installed on your system.
+    echo.
+    echo Opening Docker Desktop download page in your browser...
+    start https://www.docker.com/products/docker-desktop
+    echo.
+    echo Please complete these steps:
+    echo 1. Download and install Docker Desktop
+    echo 2. Start Docker Desktop
+    echo 3. Wait for Docker Desktop to fully start
+    echo.
+    choice /M "Have you installed Docker Desktop and is it running now"
+    if errorlevel 2 (
+        echo Setup cancelled. Please run the script again after installing Docker Desktop.
+        goto CLEANUP ERROR
+        exit /b 1
+    )
+    goto CHECK_DOCKER
+)
+
+REM Check if Docker is running
+echo Checking if Docker is running...
+docker info > nul 2>&1
+if %errorlevel% neq 0 (
+    echo.
+    echo Docker is installed but not running.
+    echo Please start Docker Desktop and wait for it to be ready.
+    echo.
+    choice /M "Is Docker Desktop running now"
+    if errorlevel 2 (
+        echo Setup cancelled. Please run the script again after starting Docker Desktop.
+        goto CLEANUP ERROR
+        exit /b 1
+    )
+    goto CHECK_DOCKER
+)
+
+echo Docker is installed and running!
+echo.
+
+REM Check if port 3000 is available
+echo Checking if port 3000 is available...
+netstat -ano | find "0.0.0.0:3000" > nul
+if not errorlevel 1 (
+    echo.
+    echo Warning: Port 3000 is already in use.
+    echo The application might not start correctly.
+    echo Please free up port 3000 or modify the port in docker-compose.yml after setup.
+    echo.
+    choice /M "Do you want to continue anyway"
+    if errorlevel 2 (
+        goto CLEANUP ERROR
+        exit /b 1
+    )
 )
 
 REM Create directories
@@ -42,9 +107,7 @@ if /i "%ADD_KEY%"=="Y" (
     set /p API_KEY=
     
     echo.
-    echo Debug: Current directory is:
-    cd
-    echo Debug: Saving API key to .env.local...
+    echo Saving API key to .env.local...
     
     REM Direct file write approach
     echo OPENAI_API_KEY=%API_KEY%> .env.local
@@ -52,12 +115,10 @@ if /i "%ADD_KEY%"=="Y" (
     
     if %errorlevel% neq 0 (
         echo Error: Failed to save API key to .env.local
-        pause
+        goto CLEANUP ERROR
         exit /b 1
     )
     echo API key has been saved successfully!
-    echo Debug: Verifying .env.local exists:
-    dir .env.local
     set API_KEY_SET=1
 ) else (
     echo.
@@ -96,10 +157,22 @@ if %errorlevel% neq 0 (
     echo.
     echo Error: Failed to download Docker image.
     echo Please check your internet connection and try again.
-    pause
+    goto CLEANUP ERROR
     exit /b 1
 )
 echo Docker image downloaded successfully!
+
+echo.
+echo Starting the application...
+docker-compose down >nul 2>&1
+docker-compose up -d
+if %errorlevel% neq 0 (
+    echo.
+    echo Error: Failed to start the application.
+    echo Please try running 'docker-compose up -d' manually.
+    goto CLEANUP ERROR
+    exit /b 1
+)
 
 echo.
 echo Setup complete!
@@ -112,9 +185,15 @@ if "%API_KEY_SET%"=="0" (
     echo Voice features are enabled with your API key.
 )
 echo.
-echo Next steps:
-echo 1. Run: docker-compose up -d
-echo 2. Open http://localhost:3000 in your browser
+echo The application is now running!
+echo.
+echo IMPORTANT: Do not use Docker Desktop's play button to start the container.
+echo Always use these commands instead:
+echo - To start: docker-compose up -d
+echo - To stop:  docker-compose down
+echo.
+echo Opening http://localhost:3000 in your default browser...
+start http://localhost:3000
 echo.
 echo Press any key to exit...
 pause > nul 
